@@ -23,3 +23,5 @@ The findings from the challenge are to be documented in a systematic form as a s
 - Roman Studer (roman.studer1@students.fhnw.ch, [Github](https://github.com/roman-studer))
 - Lukas Gehrig (lukas.gehrig@students.fhnw.ch, [Github](https://github.com/Lukas113))
 - Simon Luder (simon.luder@students.fhnw.ch, [Github](https://github.com/SimonLuder))
+
+TEST
