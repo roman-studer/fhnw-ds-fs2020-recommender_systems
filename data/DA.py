@@ -4,27 +4,36 @@ Created on Thu Feb 27 19:25:15 2020
 
 @author: Lukas
 """
+import pandas as pd
 
 class DA(object):
     
-    #these two df are stored in a static way because I expect that they will be used very frequently in the Notebook chunks
-    _df_origin = None
-    _df_sub = None
+    _da = None
+    
+    @staticmethod
+    def get_DA():
+        #singleton pattern to get object (because if initialize the object multiple times, u don't want to wait the df_load each time)
+        return DA._da
     
     def __init__(self):
-        #load data from
-        DA._df_origin = df_origin
+        self._df_origin = None
+        self._df_sub = None
         
     def _create_df_sub(self):
         """Creates the specified sub-dataset"""
-        #create df out of DA._df_origin (use self._get_df_origin()) in order to create the RS
+        #create df out of self._df_origin (use self._get_df_origin()) in order to create the RS
         
     def _get_df_origin(self):
         """Lazy loader of the whole dataset"""
-        if DA._df_origin == None:
-            #load and store data from file
-        return DA._df_origin
+        if self._df_origin == None:
+            #load and store data (in self._df_origin) from file (or maybe it is more performant to load from pickle (.pkl) object?)
+        return self._df_origin
     
     def _get_df_sub(self):
         """Lazy loader of the sub dataset"""
-        #if DA._df_sub is None, check if file exists, if yes, load and store it, otherwise create it with the according function
+        #if self._df_sub is None, check if file exists, if yes, load and store it, otherwise create it with the according function
+        return self._df_sub
+    
+    def get_df_example(self):
+        """Just an example function, which creates/gets the data via data-wrangling or object loading"""
+        return df_example
