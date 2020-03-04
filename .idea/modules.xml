@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/../../Climate/FS2020-Project-Climate-Change/.idea/FS2020-Project-Climate-Change.iml" filepath="$PROJECT_DIR$/../../Climate/FS2020-Project-Climate-Change/.idea/FS2020-Project-Climate-Change.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../Vacancy/Vacancy/.idea/Vacancy.iml" filepath="$PROJECT_DIR$/../../Vacancy/Vacancy/.idea/Vacancy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/fhnw-ds-fs2020-recommender_systems.iml" filepath="$PROJECT_DIR$/.idea/fhnw-ds-fs2020-recommender_systems.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../../1. Semester/Projekt Fc_DS/immoRent/.idea/immoRent.iml" filepath="$PROJECT_DIR$/../../../1. Semester/Projekt Fc_DS/immoRent/.idea/immoRent.iml" />
+    </modules>
+  </component>
+</project>
