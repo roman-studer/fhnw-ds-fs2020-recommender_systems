@@ -4,6 +4,7 @@ Created on Thu Feb 27 19:25:15 2020
 
 @author: Lukas, Roman
 """
+import pandas as pd
 from recommender._Recommender_Init import _RecommenderInit
 
 
@@ -18,10 +19,16 @@ class RS(_RecommenderInit):
         self.data = data
         self._param = param  # maybe store some parameter when initializing object? idk
 
-    def transform(self, data):
+    def transform(self, data, return_type):
         # TO DO: correct placement of function?
         # used to transform data into a fitting format for the recommender
-        pass
+        if type(data) != return_type:
+            if return_type == "dataframe":
+                data = pd.DataFrame(data)
+            else:
+                data = data.values()
+        return data
+
 
     def train_test(self, data):
         # TO DO: maybe move to _RecommenderInit
