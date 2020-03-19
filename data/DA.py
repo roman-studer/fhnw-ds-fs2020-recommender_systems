@@ -71,7 +71,7 @@ class DA(object):
                                                     'reordered': 'sum'}) for chunk in chunks]
         df = pd.concat(subsets).groupby(level=0).sum()
         df.reset_index(inplace=True, drop=True)
-        df.rename(columns={"product_id": "n_orders", "user_id": "n_users", 'reordered': "n_reorders"})
+        df.rename(columns={"product_id": "n_orders", "user_id": "n_users", 'reordered': "n_reorders"}, inplace=True)
 
         # create rating:
         n_orders = sum(df['n_orders'])  # total number of ordered products
