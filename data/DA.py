@@ -39,7 +39,7 @@ class DA(object):
                                 rating : self._red_prod_rating}
         
     def _red_prod_freq(self, df = None, drop = 0.8):
-        """Keeps `keep` of the most popular products"""
+        """Drops `drop` of the most unpopular products"""
         if not isinstance(df, pd.DataFrame):
             df = self._get_df_origin()
         products = df.loc[:,'product_name'].value_counts()
@@ -49,7 +49,7 @@ class DA(object):
         return df_selected.reset_index(drop = True)
     
     def _red_prod_aisle(self, drop=0.8):
-        """Keeps `keep` of the most popular products per aisle"""
+        """Drops `drop` of the most unpopular products per aisle"""
         df = self._get_df_origin()
         df_selected = pd.DataFrame(columns = df.columns)
         df_grouped = df.groupby(['aisle_id'])
@@ -57,7 +57,44 @@ class DA(object):
             df_selected = df_selected.append(self._red_prod_freq(group, drop))
         return df_selected
     
-    def _red_prod_rating(self, drop=0.8):
+    def _red_prod_rating(self, drop = 0.8):
+        """Drops `drop` of the most unpopular products evaluated per rating"""
+        df = self._get_df_origin()
+        order_id, product_name, freq, support, user_id = 'order_id', 'product_name', 'freq', 'support', 'user_id'
+        count_customers, customer_ratio, reordered, rating = 'count_customers', 'customer_ratio', 'reordered', 'rating'
+        
+        # creates a product df inc. support
+        trans_count = df.loc[:,order_id].unique().shape[0]
+        df_products = pd.DataFrame(df.loc[:,product_name].value_counts()).reset_index()
+        df_products = df_products.rename(columns = {df_products.columns[0] : product_name, df_products.columns[1] : freq})
+        df_products[support] = df_products.loc[:,freq] * (1/trans_count)
+        
+        # creates customer ratio
+        customer_number = df.loc[:,user_id].unique().shape[0]
+        df_product_customers = df.loc[:,[user_id,product_name]].groupby(product_name)
+        df_product_customers = pd.DataFrame(df_product_customers.user_id.nunique())
+        df_product_customers = df_product_customers.reset_index().rename(columns = {user_id : count_customers})
+        df_product_customers[customer_ratio] = df_product_customers.loc[:,count_customers] * (1/customer_number)
+        
+        #creates reordered transactions and merges all calculated ratios to the product df
+        df_product_reordered = df.loc[:,[product_name,reordered]].groupby(product_name).sum().reset_index()
+        df_products = pd.merge(df_products, df_product_customers, on = product_name)
+        df_products = pd.merge(df_products, df_product_reordered, on = product_name)
+        
+        # normalizes all ratios between 0 and 1 to give each ratio the same weight and sums them up
+        df_products.loc[:,[support,customer_ratio,reordered]] -= df_products.loc[:,[support,customer_ratio,reordered]].min()
+        df_products.loc[:,[support,customer_ratio,reordered]] /= df_products.loc[:,[support,customer_ratio,reordered]].max()
+        df_products[rating] = df_products.loc[:,[support,customer_ratio,reordered]].sum(axis = 1)
+        
+        # drops the specified amount of products out of the original df by the rating
+        df_products = df_products.sort_values(by = [rating], ascending = False)
+        products = df_products.loc[:,product_name]
+        ix = int(products.keys().shape[0] * (1 - drop))
+        items = products[:ix].values
+        df_selected = df[df[product_name].isin(items)]
+        return df_selected.reset_index(drop = True)
+    
+    def _red_prod_rating2(self, drop=0.8):
         """Keeps the products with the highest rating"""
 
         # create df with columns: count of orders for product, customers per product, reorders per product:
