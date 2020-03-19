@@ -6,6 +6,7 @@ Created on Thu Feb 27 19:25:15 2020
 """
 import pandas as pd
 import os
+from pathlib import Path
 
 
 class DA(object):
@@ -47,7 +48,7 @@ class DA(object):
         df_selected = df[df['product_name'].isin(items)]
         return df_selected.reset_index(drop = True)
     
-    def _red_prod_aisle(self, drop = 0.8):
+    def _red_prod_aisle(self, drop=0.8):
         """Keeps `keep` of the most popular products per aisle"""
         df = self._get_df_origin()
         df_selected = pd.DataFrame(columns = df.columns)
@@ -56,8 +57,52 @@ class DA(object):
             df_selected = df_selected.append(self._red_prod_freq(group, drop))
         return df_selected
     
-    def _red_prod_rating(self):
-        pass
+    def _red_prod_rating(self, drop=0.8):
+        """Keeps the products with the highest rating"""
+
+        # create df with columns: count of orders for product, customers per product, reorders per product:
+        if Path('Recommender4Retail.csv').is_file():
+            chunks = pd.read_csv("Recommender4Retail.csv", chunksize=10_000)
+        else:
+            raise Exception('No file named "Recommender4Retail.csv" found in directory.')
+
+        subsets = [chunk.groupby('product_id').agg({'product_id': 'count',
+                                                    'user_id': 'nunique',
+                                                    'reordered': 'sum'}) for chunk in chunks]
+        df = pd.concat(subsets).groupby(level=0).sum()
+        df.reset_index(inplace=True, drop=True)
+        df.rename(columns={"product_id": "n_orders", "user_id": "n_users", 'reordered': "n_reorders"})
+
+        # create rating:
+        n_orders = sum(df['n_orders'])  # total number of ordered products
+        n_customers = sum(df['n_users'])  # total number of customers
+        n_reorders = sum(df['reordered'])  # total number of reorders
+        df['rating'] = df['n_orders'] / n_orders + df['n_users'] / n_customers + df['n_reorders'] / n_reorders
+
+        # normalize rating
+        df['rating'] = (df['rating'] - df['rating'].min()) / (df['rating'].max() - df['rating'].min())
+
+        # drop "bad" products:
+        df.sort_values('rating', ascending=False, inplace=True)
+
+        # calculate condition to drop
+        rows_to_drop = int(len(df) * drop)
+        df = df.drop(df.tail(rows_to_drop).index)
+
+        # drop transactions
+        good_products = df.index.tolist()
+
+        chunks = pd.read_csv('Recommender4Retail.csv', chunksize=10_000)
+        for chunk in chunks:
+            chunk = chunk[chunk['product_id'].isin(good_products)]
+
+            if Path('rating.csv').is_file():
+                chunk.to_csv('rating.csv', mode='a', header=False)
+            else:
+                chunk.to_csv('rating.csv', mode='a', header=True)
+        df_selected = pd.read_csv('rating.csv')
+
+        return df_selected
         
     def _get_df_origin(self):
         """Lazy loader of the whole dataset"""
@@ -82,8 +127,3 @@ class DA(object):
         
     def get_nav(self):
         return self._nav
-    
-    
-    
-    
-    
