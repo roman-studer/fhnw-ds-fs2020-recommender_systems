@@ -186,7 +186,19 @@ class DA(object):
             df = self._df_sub_data[method]
 
             # create interaction matrix
-            df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
+            if mode == 'count':
+                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
+            else:
+                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
+
+                def binary(x):
+                    if x > 0:
+                        x = 1
+                    else:
+                        x = 0
+                    return x
+
+                df.applymap(binary)
 
             self._interaction[mode] = df
 
@@ -203,4 +215,4 @@ class DA(object):
 
 if __name__ == '__main__':
     A = DA.get_DA()
-    A.get_interaction(mode='binary', method='freq')
+    A.get_interaction(mode='count', method='freq')
