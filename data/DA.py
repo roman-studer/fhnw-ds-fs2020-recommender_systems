@@ -49,6 +49,7 @@ class DA(object):
         ix = int(products.keys().shape[0] * (1 - drop))
         items = products[:ix].keys()
         df_selected = df[df['product_name'].isin(items)]
+        df_selected = self.drop_user(df_selected)
         df_selected = df_selected.loc[:, ['user_id', 'product_name']]
         return df_selected.reset_index(drop=True)
 
@@ -59,7 +60,9 @@ class DA(object):
         df_grouped = df.groupby(['aisle_id'])
         for aisle_id, group in df_grouped:
             df_selected = df_selected.append(self._red_prod_freq(group, drop))
+        df_selected = self.drop_user(df_selected)
         df_selected = df_selected.loc[:, ['user_id', 'product_name']]
+
         return df_selected
 
     def _red_prod_rating(self, drop=0.8):
@@ -99,7 +102,9 @@ class DA(object):
         ix = int(products.keys().shape[0] * (1 - drop))
         items = products[:ix].values
         df_selected = df[df[product_name].isin(items)]
+        df_selected = self.drop_user(df_selected)
         df_selected = df_selected.loc[:, ['user_id', 'product_name']]
+
         return df_selected.reset_index(drop=True)
 
     def _red_prod_rating2(self, drop=0.8):
@@ -146,6 +151,7 @@ class DA(object):
             else:
                 chunk.to_csv('rating.csv', mode='a', header=True)
         df_selected = pd.read_csv('rating.csv')
+        df_selected = self.drop_user(df_selected)
 
         return df_selected
 
@@ -220,6 +226,23 @@ class DA(object):
     def get_nav(self):
         return self._nav
 
+    @staticmethod
+    def drop_user(df, n_orders=5):
+        """
+        Drops every user in a DataFrame that has n_orders or less in total
+        :param df: sorted and reduced DataFrame
+        :param n_orders: Number of orders of a customers, below that and he will be dropped
+        :return df: DataFrame without the dropped customers
+        """
+        # group by number of orders
+        df_grouped = df.groupby('user_id').agg({'order_id': 'nunique'}).reset_index()
+
+        # drop every customer with number of orders <= n_orders
+        users = df_grouped.loc[df_grouped.order_id >= n_orders].user_id.to_list()
+        # reduce DataFrame
+        df = df[df.user_id.isin(users)]
+
+        return df
 
 if __name__ == '__main__':
     A = DA.get_DA()
