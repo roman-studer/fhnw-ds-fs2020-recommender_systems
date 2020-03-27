@@ -5,39 +5,245 @@ Created on Thu Feb 27 19:25:15 2020
 @author: Lukas
 """
 import pandas as pd
+import numpy as np
+import os
+from pathlib import Path
 
 
 class DA(object):
-    
     _da = None
-    
+
     @staticmethod
-    def get_DA():
-        #singleton pattern
+    def get_DA(nav=None):
+        """
+        Returns single instance of DA (DataAccess)
+        
+        Keyword arguments:
+        nav -- path-navigation to root (default ../)
+        """
         if not isinstance(DA._da, DA):
             DA._da = DA()
+        if isinstance(nav, str):
+            DA._da.set_nav(nav + 'data/')
+        elif not isinstance(DA._da.get_nav(), str):
+            DA._da.set_nav('../data/')
         return DA._da
-    
+
     def __init__(self):
         self._df_origin = None
-        self._df_sub = None
-        
-    def _create_df_sub(self):
-        """Creates the specified sub-dataset"""
-        #create df out of self._df_origin (use self._get_df_origin()) in order to create the RS
-        return None
-        
-    def _get_df_origin(self, nav = '../'):
+        self._nav = None
+        freq, aisle, rating, binary, count_int = 'freq', 'aisle', 'rating', 'binary', 'count_int'
+        binary_freq, binary_aisle, binary_rating, count_int_freq, count_int_aisle, count_int_rating = 'binary_freq', 'binary_asile', 'binary_rating', 'count_int_freq', 'count_int_aisle', 'count_int_rating'
+        self._df_sub_data = {freq: None, aisle: None, rating: None}
+        self._df_sub_methods = {freq: self._red_prod_freq,
+                                aisle: self._red_prod_aisle,
+                                rating: self._red_prod_rating}
+        self._interaction = {binary_freq: None, binary_aisle: None, binary_rating: None,
+                             count_int_freq: None, count_int_aisle: None, count_int_rating: None}
+
+    def _red_prod_freq(self, df=None, drop=0.8):
+        """Drops `drop` of the most unpopular products"""
+        if not isinstance(df, pd.DataFrame):
+            df = self._get_df_origin()
+        products = df.loc[:, 'product_name'].value_counts()
+        ix = int(products.keys().shape[0] * (1 - drop))
+        items = products[:ix].keys()
+        df_selected = df[df['product_name'].isin(items)]
+        df_selected = self.drop_user(df_selected)
+        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
+        return df_selected.reset_index(drop=True)
+
+    def _red_prod_aisle(self, drop=0.8):
+        """Drops `drop` of the most unpopular products per aisle"""
+        df = self._get_df_origin()
+        df_selected = pd.DataFrame(columns=df.columns)
+        df_grouped = df.groupby(['aisle_id'])
+        for aisle_id, group in df_grouped:
+            df_selected = df_selected.append(self._red_prod_freq(group, drop))
+        df_selected = self.drop_user(df_selected)
+        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
+
+        return df_selected
+
+    def _red_prod_rating(self, drop=0.8):
+        """Drops `drop` of the most unpopular products evaluated per rating"""
+        df = self._get_df_origin()
+        order_id, product_name, freq, support, user_id = 'order_id', 'product_name', 'freq', 'support', 'user_id'
+        count_customers, customer_ratio, reordered, rating = 'count_customers', 'customer_ratio', 'reordered', 'rating'
+
+        # creates a product df inc. support
+        trans_count = df.loc[:, order_id].unique().shape[0]
+        df_products = pd.DataFrame(df.loc[:, product_name].value_counts()).reset_index()
+        df_products = df_products.rename(columns={df_products.columns[0]: product_name, df_products.columns[1]: freq})
+        df_products[support] = df_products.loc[:, freq] * (1 / trans_count)
+
+        # creates customer ratio
+        customer_number = df.loc[:, user_id].unique().shape[0]
+        df_product_customers = df.loc[:, [user_id, product_name]].groupby(product_name)
+        df_product_customers = pd.DataFrame(df_product_customers.user_id.nunique())
+        df_product_customers = df_product_customers.reset_index().rename(columns={user_id: count_customers})
+        df_product_customers[customer_ratio] = df_product_customers.loc[:, count_customers] * (1 / customer_number)
+
+        # creates reordered transactions and merges all calculated ratios to the product df
+        df_product_reordered = df.loc[:, [product_name, reordered]].groupby(product_name).sum().reset_index()
+        df_products = pd.merge(df_products, df_product_customers, on=product_name)
+        df_products = pd.merge(df_products, df_product_reordered, on=product_name)
+
+        # normalizes all ratios between 0 and 1 to give each ratio the same weight and sums them up
+        df_products.loc[:, [support, customer_ratio, reordered]] -= df_products.loc[:,
+                                                                    [support, customer_ratio, reordered]].min()
+        df_products.loc[:, [support, customer_ratio, reordered]] /= df_products.loc[:,
+                                                                    [support, customer_ratio, reordered]].max()
+        df_products[rating] = df_products.loc[:, [support, customer_ratio, reordered]].sum(axis=1)
+
+        # drops the specified amount of products out of the original df by the rating
+        df_products = df_products.sort_values(by=[rating], ascending=False)
+        products = df_products.loc[:, product_name]
+        ix = int(products.keys().shape[0] * (1 - drop))
+        items = products[:ix].values
+        df_selected = df[df[product_name].isin(items)]
+        df_selected = self.drop_user(df_selected)
+        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
+
+        return df_selected.reset_index(drop=True)
+
+    def _red_prod_rating2(self, drop=0.8):
+        """Keeps the products with the highest rating"""
+
+        # create df with columns: count of orders for product, customers per product, reorders per product:
+        if Path('Recommender4Retail.csv').is_file():
+            chunks = pd.read_csv("Recommender4Retail.csv", chunksize=10_000)
+        else:
+            raise Exception('No file named "Recommender4Retail.csv" found in directory.')
+
+        subsets = [chunk.groupby('product_id').agg({'product_id': 'count',
+                                                    'user_id': 'nunique',
+                                                    'reordered': 'sum'}) for chunk in chunks]
+        df = pd.concat(subsets).groupby(level=0).sum()
+        df.reset_index(inplace=True, drop=True)
+        df.rename(columns={"product_id": "n_orders", "user_id": "n_users", 'reordered': "n_reorders"}, inplace=True)
+
+        # create rating:
+        n_orders = sum(df['n_orders'])  # total number of ordered products
+        n_customers = sum(df['n_users'])  # total number of customers
+        n_reorders = sum(df['reordered'])  # total number of reorders
+        df['rating'] = df['n_orders'] / n_orders + df['n_users'] / n_customers + df['n_reorders'] / n_reorders
+
+        # normalize rating
+        df['rating'] = (df['rating'] - df['rating'].min()) / (df['rating'].max() - df['rating'].min())
+
+        # drop "bad" products:
+        df.sort_values('rating', ascending=False, inplace=True)
+
+        # calculate condition to drop
+        rows_to_drop = int(len(df) * drop)
+        df = df.drop(df.tail(rows_to_drop).index)
+
+        # drop transactions
+        good_products = df.index.tolist()
+
+        chunks = pd.read_csv('Recommender4Retail.csv', chunksize=10_000)
+        for chunk in chunks:
+            chunk = chunk[chunk['product_id'].isin(good_products)]
+
+            if Path('rating.csv').is_file():
+                chunk.to_csv('rating.csv', mode='a', header=False)
+            else:
+                chunk.to_csv('rating.csv', mode='a', header=True)
+        df_selected = pd.read_csv('rating.csv')
+        df_selected = self.drop_user(df_selected)
+
+        return df_selected
+
+    def _get_df_origin(self):
         """Lazy loader of the whole dataset"""
         if not isinstance(self._df_origin, pd.DataFrame):
-            self._df_origin = pd.read_csv(nav+'data/Recommender4Retail.csv')
+            self._df_origin = pd.read_csv(self._nav + 'Recommender4Retail.csv', usecols=['user_id',
+                                                                                         'order_id',
+                                                                                         'product_name',
+                                                                                         'reordered',
+                                                                                         'aisle_id'])
+            # self._df_origin = self._df_origin.drop(columns=[self._df_origin.columns[0]]) # not necessary after only loading 5 special columns
         return self._df_origin
-    
-    def _get_df_sub(self):
+
+    def get_df_sub(self, method='freq'):
         """Lazy loader of the sub dataset"""
-        #if self._df_sub is None, check if file exists, if yes, load and store it, otherwise create it with the according function
-        return self._df_sub
-    
-    def get_df_example(self):
-        """Just an example function, which creates/gets the data via data-wrangling or object loading"""
-        return None
+        if not isinstance(self._df_sub_data[method], pd.DataFrame):
+            path = self._nav + method + '.csv'
+            if os.path.exists(path):
+                self._df_sub_data[method] = pd.read_csv(path)
+            else:
+                self._df_sub_data[method] = self._df_sub_methods[method]()
+                self._df_sub_data[method].to_csv(path, index=False)
+        return self._df_sub_data[method]
+
+    def get_interaction(self, mode='binary', method='freq'):
+        """
+        Creates an interaction matrix with shape (users,products)
+        :param method: selects the method to reduce the dataframe (see product description)
+        :param mode: defines how the interaction of the customer with the product should be represented (binary, count)
+        :return: numpy array
+        """
+        # check if interaction matrix already exists:
+        path = self._nav + method + '_interaction_' + mode + '.csv'
+        matrix = mode + '_' + method
+        if os.path.exists(path):
+            self._interaction[matrix] = pd.read_csv(path)
+        # create interaction_matrix
+        else:
+            # get data
+            self.get_df_sub(method)
+            df = self._df_sub_data[method]
+
+            # create interaction matrix
+            if mode == 'count':
+                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
+            elif mode == 'binary':
+                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
+
+                # helperfunction
+                def val_to_binary(x):
+                    if x > 0:
+                        x = 1
+                    else:
+                        x = 0
+                    return x
+
+                df = df.applymap(val_to_binary)
+            else:
+                raise Exception(
+                    'Function "get_interaction" only accepts mode "binary" and "count" not "{}"'.format(mode))
+
+            self._interaction[matrix] = df
+
+            # save interaction matrix
+            self._interaction[matrix].to_csv(path, index=False)
+        return self._interaction[matrix].to_numpy()
+
+    def set_nav(self, nav):
+        self._nav = nav
+
+    def get_nav(self):
+        return self._nav
+
+    @staticmethod
+    def drop_user(df, n_orders=5):
+        """
+        Drops every user in a DataFrame that has n_orders or less in total
+        :param df: sorted and reduced DataFrame
+        :param n_orders: Number of orders of a customers, below that and he will be dropped
+        :return df: DataFrame without the dropped customers
+        """
+        # group by number of orders
+        df_grouped = df.groupby('user_id').agg({'order_id': 'nunique'}).reset_index()
+
+        # drop every customer with number of orders <= n_orders
+        users = df_grouped.loc[df_grouped.order_id >= n_orders].user_id.to_list()
+        # reduce DataFrame
+        df = df[df.user_id.isin(users)]
+
+        return df
+
+if __name__ == '__main__':
+    A = DA.get_DA()
+    A.get_interaction(mode='binary', method='freq')

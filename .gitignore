@@ -132,3 +132,7 @@ dmypy.json
 *.csv
 *.pkl
 
+# IDE dependencies
+.idea
+.spyproject
+
