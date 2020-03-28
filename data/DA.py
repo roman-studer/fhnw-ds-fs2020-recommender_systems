@@ -33,13 +33,10 @@ class DA(object):
         self._df_origin = None
         self._nav = None
         freq, aisle, rating, binary, count_int = 'freq', 'aisle', 'rating', 'binary', 'count_int'
-        binary_freq, binary_aisle, binary_rating, count_int_freq, count_int_aisle, count_int_rating = 'binary_freq', 'binary_asile', 'binary_rating', 'count_int_freq', 'count_int_aisle', 'count_int_rating'
         self._df_sub_data = {freq: None, aisle: None, rating: None}
         self._df_sub_methods = {freq: self._red_prod_freq,
                                 aisle: self._red_prod_aisle,
                                 rating: self._red_prod_rating}
-        self._interaction = {binary_freq: None, binary_aisle: None, binary_rating: None,
-                             count_int_freq: None, count_int_aisle: None, count_int_rating: None}
 
     def _red_prod_freq(self, df=None, drop=0.8):
         """Drops `drop` of the most unpopular products"""
@@ -177,49 +174,6 @@ class DA(object):
                 self._df_sub_data[method].to_csv(path, index=False)
         return self._df_sub_data[method]
 
-    def get_interaction(self, mode='binary', method='freq'):
-        """
-        Creates an interaction matrix with shape (users,products)
-        :param method: selects the method to reduce the dataframe (see product description)
-        :param mode: defines how the interaction of the customer with the product should be represented (binary, count)
-        :return: numpy array
-        """
-        # check if interaction matrix already exists:
-        path = self._nav + method + '_interaction_' + mode + '.csv'
-        matrix = mode + '_' + method
-        if os.path.exists(path):
-            self._interaction[matrix] = pd.read_csv(path)
-        # create interaction_matrix
-        else:
-            # get data
-            self.get_df_sub(method)
-            df = self._df_sub_data[method]
-
-            # create interaction matrix
-            if mode == 'count':
-                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
-            elif mode == 'binary':
-                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
-
-                # helperfunction
-                def val_to_binary(x):
-                    if x > 0:
-                        x = 1
-                    else:
-                        x = 0
-                    return x
-
-                df = df.applymap(val_to_binary)
-            else:
-                raise Exception(
-                    'Function "get_interaction" only accepts mode "binary" and "count" not "{}"'.format(mode))
-
-            self._interaction[matrix] = df
-
-            # save interaction matrix
-            self._interaction[matrix].to_csv(path, index=False)
-        return self._interaction[matrix].to_numpy()
-
     def set_nav(self, nav):
         self._nav = nav
 
@@ -243,6 +197,7 @@ class DA(object):
         df = df[df.user_id.isin(users)]
 
         return df
+
 
 if __name__ == '__main__':
     A = DA.get_DA()
