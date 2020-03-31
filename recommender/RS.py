@@ -45,8 +45,8 @@ class RS(_RecommenderInit):
                              aisle_rating_user: None, rating_binary_user: None,
                              rating_count_user: None, rating_rating_user: None}
 
-        cosine = 'cosine'
-        self._similarity_method = {cosine: self.sim_cosine}
+        cosine, pearson = 'cosine', 'pearson'
+        self._similarity_method = {cosine: self.sim_cosine, pearson: self.sim_pearson}
 
     def get_interaction(self, method='freq', mode='binary', recommender='item'):
         """
@@ -95,7 +95,7 @@ class RS(_RecommenderInit):
             self._interaction[matrix] = df
 
             # save interaction matrix
-            pickle.dump(self._interaction[matrix], open(path, "wb"))
+            pickle.dump(df, open(path, "wb"))
 
         return self._interaction[matrix]
 
@@ -126,10 +126,9 @@ class RS(_RecommenderInit):
 
                 # get value pairs:
                 for i in range(length):
+                    a = np.asarray(df[:, i].todense()).T[0]
                     for j in range(length):
                         # fill empty similarity_matrix
-
-                        a = np.asarray(df[:, i].todense()).T[0]
                         b = np.asarray(df[:, j].todense()).T[0]
                         similarity_matrix[i, j] = self._similarity_method[sim](a, b)
 
@@ -139,11 +138,11 @@ class RS(_RecommenderInit):
 
                 # get value pairs:
                 for i in range(length):
+                    a = np.asarray(df[i, :].todense())[0]
+
                     for j in range(length):
                         # fill empty similarity_matrix
-
-                        a = np.asarray(df[:, i].todense()).T[0]
-                        b = np.asarray(df[:, j].todense()).T[0]
+                        b = np.asarray(df[j, :].todense())[0]
                         similarity_matrix[i, j] = self._similarity_method[sim](a, b)
 
             pickle.dump(similarity_matrix, open(path, 'wb'))
@@ -170,6 +169,34 @@ class RS(_RecommenderInit):
 
         # cosine similarity:
         s = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
+        return s
+
+    @staticmethod
+    def sim_pearson(u, v, threshold=True):
+        """
+        Calculates the pearson similarity between two given users
+        :param u: vector of all ratings for user/item
+        :param v: vector of all ratings for user/item
+        :param threshold: activate involvement of a threshold "multiplication" of the function
+        :return s: similarity value between -1 and 1 (1 high correlation, 0 no correlation, -1 high negative correlation) or NaN if calculation is not possible
+        """
+        # get overlapping items for user u and v inclusive ratings.
+        intersection = [k for k, i, j in zip(np.arange(len(u)), u, v) if i > 0 and j > 0]
+
+        u_mean_r, v_mean_r = np.average(u, weights=(u > 0)), np.average(v, weights=(v > 0))  # average rating
+
+        numerator = sum(
+            a * b for a, b in zip([u[i] - u_mean_r for i in intersection], [v[i] - v_mean_r for i in intersection]))
+        denominator1 = np.sqrt(sum([(u[i] - u_mean_r) ** 2 for i in intersection]))
+        denominator2 = np.sqrt(sum([(v[i] - v_mean_r) ** 2 for i in intersection]))
+
+        if numerator / (denominator1 * denominator2) == 0:
+            s = np.nan
+        else:
+            s = numerator / (denominator1 * denominator2)
+        if threshold:
+            s = s * min(len(interesection) / 50, 1)
 
         return s
 
@@ -211,7 +238,7 @@ class RS(_RecommenderInit):
 
 if __name__ == '__main__':
     B = RS()
-    B.similarity(mode='binary', method='rating', sim='cosine')
+    B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
