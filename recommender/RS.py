@@ -29,9 +29,9 @@ class RS(_RecommenderInit):
             'binary_freq', 'binary_asile', 'binary_rating', 'count_int_freq', 'count_int_aisle', 'count_int_rating'
 
         freq_binary_item, freq_count_item, freq_rating_item, aisle_binary_item, aisle_count_item, \
-            aisle_rating_item, rating_binary_item, rating_count_item, rating_rating_item, \
-            freq_binary_user, freq_count_user, freq_rating_user, aisle_binary_user, \
-            aisle_count_user, aisle_rating_user, rating_binary_user, rating_count_user, rating_rating_user = \
+        aisle_rating_item, rating_binary_item, rating_count_item, rating_rating_item, \
+        freq_binary_user, freq_count_user, freq_rating_user, aisle_binary_user, \
+        aisle_count_user, aisle_rating_user, rating_binary_user, rating_count_user, rating_rating_user = \
             'freq_binary_item', 'freq_count_item', 'freq_rating_item', 'aisle_binary_item', 'aisle_count_item', \
             'aisle_rating_item', 'rating_binary_item', 'rating_count_item', 'rating_rating_item', \
             'freq_binary_user', 'freq_count_user', 'freq_rating_user', 'aisle_binary_user', \
@@ -128,9 +128,15 @@ class RS(_RecommenderInit):
                 for i in range(length):
                     a = np.asarray(df[:, i].todense()).T[0]
                     for j in range(length):
+                        if i == j:
+                            similarity_matrix[i, i] = 1  # fill diagonal of matrix with similarity "1"
                         # fill empty similarity_matrix
-                        b = np.asarray(df[:, j].todense()).T[0]
-                        similarity_matrix[i, j] = self._similarity_method[sim](a, b)
+                        elif i > j:
+                            b = np.asarray(df[:, j].todense()).T[0]
+                            similarity_matrix[i, j] = self._similarity_method[sim](a, b)  # fill upper triangular matrix
+                            similarity_matrix[j, i] = similarity_matrix[i, j]  # fill lower triangular matrix
+                        else:
+                            pass
 
             elif recommender == 'user':
                 length = df.shape[0]
@@ -141,9 +147,15 @@ class RS(_RecommenderInit):
                     a = np.asarray(df[i, :].todense())[0]
 
                     for j in range(length):
+                        if i == j:
+                            similarity_matrix[i, i] = 1  # fill diagonal of matrix with similarity "1"
                         # fill empty similarity_matrix
-                        b = np.asarray(df[j, :].todense())[0]
-                        similarity_matrix[i, j] = self._similarity_method[sim](a, b)
+                        elif i > j:
+                            b = np.asarray(df[j, :].todense())[0]
+                            similarity_matrix[i, j] = self._similarity_method[sim](a, b)  # fill upper triangular matrix
+                            similarity_matrix[j, i] = similarity_matrix[i, j]  # fill lower triangular matrix
+                        else:
+                            pass
 
             pickle.dump(similarity_matrix, open(path, 'wb'))
 
