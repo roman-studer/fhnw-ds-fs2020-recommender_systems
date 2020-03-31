@@ -201,4 +201,3 @@ class DA(object):
 
 if __name__ == '__main__':
     A = DA.get_DA()
-    A.get_interaction(mode='binary', method='freq')

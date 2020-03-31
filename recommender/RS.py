@@ -208,7 +208,7 @@ class RS(_RecommenderInit):
         else:
             s = numerator / (denominator1 * denominator2)
         if threshold:
-            s = s * min(len(interesection) / 50, 1)
+            s = s * min(len(intersection) / 50, 1)
 
         return s
 
