@@ -252,6 +252,10 @@ class RS(_RecommenderInit):
             index[row,:] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
             ratings[row,:] = matrix[row, index[row,:].astype(int)]
 
+        df = pd.DataFrame(index.astype(int), columns=(['{}.'.format(s) for s in np.arange(1, nr_of_items+1, 1)]))
+        df.insert(0, "Recommendation for:", df.index)
+        print(df)
+        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv' , index=False, header=True)
         # print results
         print("Recommendation for {}:".format(item_id))
         for i in range(index.shape[1]):
