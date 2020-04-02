@@ -62,6 +62,7 @@ class RS(_RecommenderInit):
         if os.path.exists(path):
             self._interaction[matrix] = pickle.load(open(path, "rb"))
 
+
         # create interaction_matrix
         else:
             # get data
@@ -84,8 +85,10 @@ class RS(_RecommenderInit):
             # csr_matrix for user-user or csc_matrix for item-item
             if recommender == 'user':
                 df = csr_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
+                print(df)
             elif recommender == 'item':
                 df = csc_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
+                print(df)
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
 
@@ -208,7 +211,7 @@ class RS(_RecommenderInit):
         else:
             s = numerator / (denominator1 * denominator2)
         if threshold:
-            s = s * min(len(intersection) / 50, 1)
+            s = s * min(len(interesection) / 50, 1)
 
         return s
 
@@ -230,10 +233,35 @@ class RS(_RecommenderInit):
     def fit(self, df_train):
         return None
 
-    def recommend(self, user):
-        # user may be a list or object?
+    def recommend(self, item_id, nr_of_items, mode, method, recommender):
 
-        return prediction
+        path = self.DA._nav + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+        if os.path.exists(path):
+            matrix = pickle.load(open(path, "rb"))
+        else:
+            return print("File doesn't exist")
+
+        #Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
+        np.fill_diagonal(matrix, -2)
+
+        #gets two list of item index and item similarity rating
+        nr_of_rows = matrix.shape[0]
+        index = np.zeros((nr_of_rows, nr_of_items))
+        ratings = np.zeros((nr_of_rows, nr_of_items))
+        for row in range(nr_of_rows):
+            index[row,:] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
+            ratings[row,:] = matrix[row, index[row,:].astype(int)]
+
+        df = pd.DataFrame(index.astype(int), columns=(['{}.'.format(s) for s in np.arange(1, nr_of_items+1, 1)]))
+        df.insert(0, "Recommendation for:", df.index)
+        print(df)
+        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv' , index=False, header=True)
+        # print results
+        print("Recommendation for {}:".format(item_id))
+        for i in range(index.shape[1]):
+            print("{}: {} with a similarity rating of {} ".format((i+1), int(index[item_id, i]), round(ratings[item_id, i], 3)))
+
+        return
 
     def get_df_interaction(self, method, mode, recommender):
         """Lazy loader of the interaction matrix"""
@@ -250,7 +278,9 @@ class RS(_RecommenderInit):
 
 if __name__ == '__main__':
     B = RS()
-    B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
+    B.get_interaction()
+    # B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
+    B.recommend(item_id=2, nr_of_items=15, method='rating', mode='count', recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
