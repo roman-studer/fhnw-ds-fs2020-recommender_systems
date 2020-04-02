@@ -102,12 +102,14 @@ class RS(_RecommenderInit):
         return self._interaction[matrix]
 
     def product_names(self, method='freq'):
+        """
+        returns a list of products contained in the. The index is the corresponding index number in the similarity matrix.
+        """
         self.DA.get_df_sub(method)
         df = self.DA._df_sub_data[method]
-        product_names = pd.DataFrame(sorted(df.product_name.unique()))
-        product_names = product_names.rename(columns={0: 'product'})
+        product = pd.DataFrame(sorted(df.product_name.unique()))
 
-        return product_names
+        return product
 
 
     def similarity(self, method, mode, interaction='count_int_freq', sim='cosine', recommender='item'):
