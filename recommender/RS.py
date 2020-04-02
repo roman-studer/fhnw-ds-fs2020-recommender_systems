@@ -245,46 +245,54 @@ class RS(_RecommenderInit):
     def fit(self, df_train):
         return None
 
-    def recommend(self, item_id, nr_of_items, mode, method, recommender):
+    def recommend_table(self, nr_of_items, mode, method, recommender):
+        try:
+            # Read from csv
+            df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+        except:
+            path = self.DA._nav + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+            if os.path.exists(path):
+                matrix = pickle.load(open(path, "rb"))
+            else:
+                return print("File doesn't exist")
 
-        path = self.DA._nav + method + '_' + mode + '_' + recommender + '_similarity.pkl'
-        if os.path.exists(path):
-            matrix = pickle.load(open(path, "rb"))
-        else:
-            return print("File doesn't exist")
+            # Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
+            np.fill_diagonal(matrix, -2)
 
-        # Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
-        np.fill_diagonal(matrix, -2)
+            # gets two list of item index and item similarity rating
+            nr_of_rows = matrix.shape[0]
+            index = np.zeros((nr_of_rows, nr_of_items))
+            ratings = np.zeros((nr_of_rows, nr_of_items))
+            for row in range(nr_of_rows):
+                index[row, :] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
+                ratings[row, :] = matrix[row, index[row, :].astype(int)]
 
-        # gets two list of item index and item similarity rating
-        nr_of_rows = matrix.shape[0]
-        index = np.zeros((nr_of_rows, nr_of_items))
-        ratings = np.zeros((nr_of_rows, nr_of_items))
-        for row in range(nr_of_rows):
-            index[row, :] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
-            ratings[row, :] = matrix[row, index[row, :].astype(int)]
+            tags = self.product_names(method=method)
 
-        tags = self.product_names(method=method)
+            # Create dataframe
+            df_products = pd.DataFrame(index.astype(int), columns=(['Match {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+            df_products.insert(0, "Recommendation for product:", df_products.index)
+            df_similarity = pd.DataFrame(ratings, columns=(['Similarity {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+            df = pd.concat([df_products, df_similarity], axis=1, sort=False)
+            for i in range(len(tags)):
+                df = df.replace(i, tags.iloc[i][0])
 
-        print(len(tags))
-        print(index.shape)
+            # Write to csv
+            df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
+        return
 
-        # Create dataframe
-        df_products = pd.DataFrame(index.astype(int), columns=(['Match {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
-        df_products.insert(0, "Recommendation for product:", df_products.index)
-        df_similarity = pd.DataFrame(ratings, columns=(['Similarity {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
-        df = pd.concat([df_products, df_similarity], axis=1, sort=False)
-        for i in range(len(tags)):
-            df = df.replace(i, tags.iloc[i][0])
-
-        # Write to csv
-        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
-
+    def single_recommend(self, product_name, nr_of_items, method, mode, recommender):
         # Read from csv
-        df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+        try:
+            df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+        except:
+            self.recommend_table(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender)
+            df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+
+        item_id = np.where(df["Recommendation for product:"] == product_name)[0][0]
 
         # print results
-        print("Recommendation for {}:".format(df.iloc[item_id][0]))
+        print("Recommendation for {}: \n".format(df.iloc[item_id][0]))
         for i in range((df.shape[1]//2)):
             print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i+1], round(df.iloc[item_id][df.shape[1]//2 + i + 1], 3)))
         return
@@ -306,9 +314,7 @@ if __name__ == '__main__':
     B = RS()
     B.get_interaction()
     # B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-
-
-    B.recommend(item_id=1, nr_of_items=15, method='rating', mode='count', recommender='item')
+    B.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count', recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
