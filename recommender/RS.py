@@ -57,11 +57,10 @@ class RS(_RecommenderInit):
         :return: numpy array
         """
         # check if interaction matrix already exists:
-        path = self.DA._nav + method + '_' + mode + '_' + recommender + '_interaction.pkl'
+        path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_interaction.pkl'
         matrix = method + '_' + mode + '_' + recommender
         if os.path.exists(path):
             self._interaction[matrix] = pickle.load(open(path, "rb"))
-
 
         # create interaction_matrix
         else:
@@ -102,6 +101,17 @@ class RS(_RecommenderInit):
 
         return self._interaction[matrix]
 
+    def product_names(self, method='freq'):
+        """
+        returns a list of products contained in the. The index is the corresponding index number in the similarity matrix.
+        """
+        self.DA.get_df_sub(method)
+        df = self.DA._df_sub_data[method]
+        product = pd.DataFrame(sorted(df.product_name.unique()))
+
+        return product
+
+
     def similarity(self, method, mode, interaction='count_int_freq', sim='cosine', recommender='item'):
         """
         Creates a similarity matrix with given function of shape (n,n)
@@ -110,11 +120,13 @@ class RS(_RecommenderInit):
         :param method: selects the method to reduce the dataframe (see product description)
         :param interaction: Interaction Matrix to be used
         :param sim: defines the similarity method to be used
+        :param recommender: defines if similarity matrix is for user-user or item-item matrix
+        :return similarity_matrix: nxn-Matrix containg the similarity values for every value pair
         """
         # check if user-user or item-item matrix already exists
 
         # check if interaction matrix already exists:
-        path = self.DA._nav + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+        path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
         matrix = interaction + '_' + sim
         if os.path.exists(path):
             self._interaction[matrix] = pickle.load(open(path, "rb"))
@@ -241,25 +253,26 @@ class RS(_RecommenderInit):
         else:
             return print("File doesn't exist")
 
-        #Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
+        # Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
         np.fill_diagonal(matrix, -2)
 
-        #gets two list of item index and item similarity rating
+        # gets two list of item index and item similarity rating
         nr_of_rows = matrix.shape[0]
         index = np.zeros((nr_of_rows, nr_of_items))
         ratings = np.zeros((nr_of_rows, nr_of_items))
         for row in range(nr_of_rows):
-            index[row,:] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
-            ratings[row,:] = matrix[row, index[row,:].astype(int)]
+            index[row, :] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
+            ratings[row, :] = matrix[row, index[row, :].astype(int)]
 
-        df = pd.DataFrame(index.astype(int), columns=(['{}.'.format(s) for s in np.arange(1, nr_of_items+1, 1)]))
+        df = pd.DataFrame(index.astype(int), columns=(['{}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
         df.insert(0, "Recommendation for:", df.index)
         print(df)
-        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv' , index=False, header=True)
+        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
         # print results
         print("Recommendation for {}:".format(item_id))
         for i in range(index.shape[1]):
-            print("{}: {} with a similarity rating of {} ".format((i+1), int(index[item_id, i]), round(ratings[item_id, i], 3)))
+            print("{}: {} with a similarity rating of {} ".format((i + 1), int(index[item_id, i]),
+                                                                  round(ratings[item_id, i], 3)))
 
         return
 
