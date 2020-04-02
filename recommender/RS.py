@@ -264,16 +264,29 @@ class RS(_RecommenderInit):
             index[row, :] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
             ratings[row, :] = matrix[row, index[row, :].astype(int)]
 
-        df = pd.DataFrame(index.astype(int), columns=(['{}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
-        df.insert(0, "Recommendation for:", df.index)
-        print(df)
-        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
-        # print results
-        print("Recommendation for {}:".format(item_id))
-        for i in range(index.shape[1]):
-            print("{}: {} with a similarity rating of {} ".format((i + 1), int(index[item_id, i]),
-                                                                  round(ratings[item_id, i], 3)))
+        tags = self.product_names(method=method)
 
+        print(len(tags))
+        print(index.shape)
+
+        # Create dataframe
+        df_products = pd.DataFrame(index.astype(int), columns=(['Match {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+        df_products.insert(0, "Recommendation for product:", df_products.index)
+        df_similarity = pd.DataFrame(ratings, columns=(['Similarity {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+        df = pd.concat([df_products, df_similarity], axis=1, sort=False)
+        for i in range(len(tags)):
+            df = df.replace(i, tags.iloc[i][0])
+
+        # Write to csv
+        df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
+
+        # Read from csv
+        df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+
+        # print results
+        print("Recommendation for {}:".format(df.iloc[item_id][0]))
+        for i in range((df.shape[1]//2)):
+            print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i+1], round(df.iloc[item_id][df.shape[1]//2 + i + 1], 3)))
         return
 
     def get_df_interaction(self, method, mode, recommender):
@@ -293,7 +306,9 @@ if __name__ == '__main__':
     B = RS()
     B.get_interaction()
     # B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-    B.recommend(item_id=2, nr_of_items=15, method='rating', mode='count', recommender='item')
+
+
+    B.recommend(item_id=1, nr_of_items=15, method='rating', mode='count', recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
