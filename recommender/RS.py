@@ -92,7 +92,7 @@ class RS(_RecommenderInit):
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
 
             if mode == 'binary':
-                df[df.nonzero()] = 1
+                df[df.nonzero()] = 1  # sets every value in the interaction matrix to 1 if value > 0
 
             self._interaction[matrix] = df
 
@@ -103,7 +103,7 @@ class RS(_RecommenderInit):
 
     def product_names(self, method='freq'):
         """
-        returns a list of products contained in the. The index is the corresponding index number in the similarity matrix.
+        returns a list of products contained in the df. The index is the corresponding index number in the similarity matrix.
         """
         self.DA.get_df_sub(method)
         df = self.DA._df_sub_data[method]
