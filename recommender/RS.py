@@ -4,11 +4,12 @@ import pandas as pd
 import numpy as np
 import pickle
 from scipy.sparse import csr_matrix, csc_matrix
+from scipy.sparse.linalg import norm
 from pandas.api.types import CategoricalDtype
-
 from recommender._Recommender_Init import _RecommenderInit
 from data.DA import DA
 import os
+import warnings
 
 
 class RS(_RecommenderInit):
@@ -120,8 +121,7 @@ class RS(_RecommenderInit):
 
         return product
 
-
-    def similarity(self, method, mode, interaction='count_int_freq', sim='cosine', recommender='item'):
+    def similarity(self, method, mode, sim='cosine', recommender='item'):
         """
         Creates a similarity matrix with given function of shape (n,n)
         :param df: interaction matrix (sparse matrix)
@@ -130,111 +130,84 @@ class RS(_RecommenderInit):
         :param interaction: Interaction Matrix to be used
         :param sim: defines the similarity method to be used
         :param recommender: defines if similarity matrix is for user-user or item-item matrix
-        :return similarity_matrix: nxn-Matrix containg the similarity values for every value pair
+        :return similarity_matrix: nxn-Matrix containing the similarity values for every value pair
         """
         # check if user-user or item-item matrix already exists
+        path_sim = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+        if os.path.exists(path_sim):
+            similarity_matrix = pickle.load(open(path_sim, 'rb'))
 
         # check if interaction matrix already exists:
-        path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
-        matrix = interaction + '_' + sim
-        if os.path.exists(path):
-            self._interaction[matrix] = pickle.load(open(path, "rb"))
         else:
-            # load correct df here
-            df = self.get_df_interaction(method, mode, recommender)
+            path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_interaction.pkl'
+            matrix = method + '_' + mode + '_' + recommender
+            if os.path.exists(path):
+                self._interaction[matrix] = pickle.load(open(path, "rb"))
+            else:
+                # load correct df here
+                self.get_df_interaction(method, mode, recommender)
 
-            # create empty similarity_matrix(nxn)
-            if recommender == 'item':
-                length = df.shape[1]
-                similarity_matrix = np.zeros((length, length))
+            similarity_matrix = self._similarity_method[sim](self._interaction[matrix], recommender)
 
-                # get value pairs:
-                for i in range(length):
-                    a = np.asarray(df[:, i].todense()).T[0]
-                    for j in range(length):
-                        if i == j:
-                            similarity_matrix[i, i] = 1  # fill diagonal of matrix with similarity "1"
-                        # fill empty similarity_matrix
-                        elif i > j:
-                            b = np.asarray(df[:, j].todense()).T[0]
-                            similarity_matrix[i, j] = self._similarity_method[sim](a, b)  # fill upper triangular matrix
-                            similarity_matrix[j, i] = similarity_matrix[i, j]  # fill lower triangular matrix
-                        else:
-                            pass
-
-            elif recommender == 'user':
-                length = df.shape[0]
-                similarity_matrix = np.zeros((length, length))
-
-                # get value pairs:
-                for i in range(length):
-                    a = np.asarray(df[i, :].todense())[0]
-
-                    for j in range(length):
-                        if i == j:
-                            similarity_matrix[i, i] = 1  # fill diagonal of matrix with similarity "1"
-                        # fill empty similarity_matrix
-                        elif i > j:
-                            b = np.asarray(df[j, :].todense())[0]
-                            similarity_matrix[i, j] = self._similarity_method[sim](a, b)  # fill upper triangular matrix
-                            similarity_matrix[j, i] = similarity_matrix[i, j]  # fill lower triangular matrix
-                        else:
-                            pass
-
-            pickle.dump(similarity_matrix, open(path, 'wb'))
+            pickle.dump(similarity_matrix, open(path_sim, 'wb'))
 
         return similarity_matrix
 
     @staticmethod
-    def sim_cosine(v1, v2, norm=False):
+    def sim_cosine(df, recommender):
         """
         Calculates the cosine similarity between two given vectors
-        :param v1: vector in a numpy array format
-        :param v2: vector in a numpy array format
-        :param norm: if norm is set to true the vectors will be normalized to unit vectors before the calculation
-        :return s: returns a float value between 0 and 1
+        :param time: displays the estimated time for execution if set to True
+        :param recommender: differenctiates between ubcf or ibcf recommender
+        :param df: sparse matrix with shape (user,item)
+        :return s: similarity value between -1 and 1 (1 high correlation, 0 no correlation, -1 high negative correlation)
         """
-        # check if params have correct type (comment this out later)
-        if isinstance(v1, np.ndarray) is False or isinstance(v2, np.ndarray) is False:
-            raise TypeError(f'Function only accepts v1 and v2 as type numpy.ndarray')
 
-        # normalize vectors
-        if norm:
-            v1 = v1 / np.linalg.norm(v1)
-            v2 = v2 / np.linalg.norm(v2)
+        if recommender == 'item':
 
-        # cosine similarity:
-        s = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+            # initialize empty diagonal matrix
+            length = df.shape[1]
+            similarity_matrix = np.zeros((length, length), dtype=np.float32)  # empty similarity matrix
 
-        return s
+            # precalculate normalized vector over whole df
+            normalized_vectors = norm(df, axis=0)
+
+            for i in np.arange(length):
+                # cosine similarity calculation
+                a = df[:, i]
+                numerator = df.T.dot(a).todense().T  # get the dotproduct for vector a and every other vector
+                denominator = normalized_vectors * normalized_vectors[i]
+
+                s = numerator / denominator
+                similarity_matrix[i, :] = s
+
+
+        elif recommender == 'user':
+
+            # initialize empty diagonal matrix
+            length = df.shape[0]
+            similarity_matrix = np.zeros((length, length), dtype=np.float32)  # empty similarity matrix
+
+            # precalculate normalized vector over whole df
+            normalized_vectors = norm(df, axis=1)
+
+            for i in np.arange(length):
+                # cosine similarity calculation
+                a = df[i, :]
+                numerator = df.dot(a.T).todense().T  # get the dotproduct for vector a and every other vector
+                denominator = normalized_vectors * normalized_vectors[i]
+
+                s = numerator / denominator
+                similarity_matrix[i, :] = s
+
+        return similarity_matrix
 
     @staticmethod
-    def sim_pearson(u, v, threshold=True):
+    def sim_pearson(df, recommender):
         """
-        Calculates the pearson similarity between two given users
-        :param u: vector of all ratings for user/item
-        :param v: vector of all ratings for user/item
-        :param threshold: activate involvement of a threshold "multiplication" of the function
-        :return s: similarity value between -1 and 1 (1 high correlation, 0 no correlation, -1 high negative correlation) or NaN if calculation is not possible
+        in the making!
         """
-        # get overlapping items for user u and v inclusive ratings.
-        intersection = [k for k, i, j in zip(np.arange(len(u)), u, v) if i > 0 and j > 0]
-
-        u_mean_r, v_mean_r = np.average(u, weights=(u > 0)), np.average(v, weights=(v > 0))  # average rating
-
-        numerator = sum(
-            a * b for a, b in zip([u[i] - u_mean_r for i in intersection], [v[i] - v_mean_r for i in intersection]))
-        denominator1 = np.sqrt(sum([(u[i] - u_mean_r) ** 2 for i in intersection]))
-        denominator2 = np.sqrt(sum([(v[i] - v_mean_r) ** 2 for i in intersection]))
-
-        if numerator / (denominator1 * denominator2) == 0:
-            s = np.nan
-        else:
-            s = numerator / (denominator1 * denominator2)
-        if threshold:
-            s = s * min(len(interesection) / 50, 1)
-
-        return s
+        return warnings.warn("Similarity Method 'pearson' not yet supported. Coming soon tho!")
 
     def transform(self, data, return_type):
         # TO DO: correct placement of function?
@@ -259,7 +232,7 @@ class RS(_RecommenderInit):
             # Read from csv
             df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
         except:
-            path = self.DA._nav + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+            path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
             if os.path.exists(path):
                 matrix = pickle.load(open(path, "rb"))
             else:
@@ -279,9 +252,11 @@ class RS(_RecommenderInit):
             tags = self.product_names(method=method)
 
             # Create dataframe
-            df_products = pd.DataFrame(index.astype(int), columns=(['Match {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+            df_products = pd.DataFrame(index.astype(int),
+                                       columns=(['Match {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
             df_products.insert(0, "Recommendation for product:", df_products.index)
-            df_similarity = pd.DataFrame(ratings, columns=(['Similarity {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+            df_similarity = pd.DataFrame(ratings, columns=(
+                ['Similarity {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
             df = pd.concat([df_products, df_similarity], axis=1, sort=False)
             for i in range(len(tags)):
                 df = df.replace(i, tags.iloc[i][0])
@@ -302,15 +277,16 @@ class RS(_RecommenderInit):
 
         # print results
         print("Recommendation for {}: \n".format(df.iloc[item_id][0]))
-        for i in range((df.shape[1]//2)):
-            print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i+1], round(df.iloc[item_id][df.shape[1]//2 + i + 1], 3)))
+        for i in range((df.shape[1] // 2)):
+            print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i + 1],
+                                                                  round(df.iloc[item_id][df.shape[1] // 2 + i + 1], 3)))
         return
 
     def get_df_interaction(self, method, mode, recommender):
         """Lazy loader of the interaction matrix"""
         matrix = method + '_' + mode + '_' + recommender
         if not isinstance(self._interaction[matrix], (csc_matrix, csr_matrix)):
-            path = self.DA._nav + matrix + '_interaction.pkl'
+            path = self.DA.get_nav() + matrix + '_interaction.pkl'
             if os.path.exists(path):
                 self._interaction[matrix] = pickle.load(open(path, 'rb'))
             else:
@@ -348,7 +324,8 @@ if __name__ == '__main__':
     B = RS()
     B.get_interaction()
     # B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-    B.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count', recommender='item')
+    B.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',
+                       recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
