@@ -77,7 +77,16 @@ class RS(_RecommenderInit):
             if mode == 'count' or mode == 'binary':
                 val = [1] * len(col)
             elif mode == 'rating':
-                val = df.rating
+                #creates the number of orders per unique product
+                df_o = df.groupby(by = ['user_id', 'product_name']).count().rename(columns = {'order_id':'o'}).reset_index()
+                #creates the total number of orders from a user
+                o_tot = df.groupby(by = ['user_id'])['order_id'].nunique()
+                #creates a new dataframe where user_id, product_id, o, o_tot
+                df_rating = df_o.join(o_tot, on = 'user_id').rename(columns = {'order_id':'o_tot'})
+                #generates the rating for val
+                o = df_rating.loc[:, 'o'].to_numpy()
+                o_tot = df_rating.loc[:, 'o_tot'].to_numpy()
+                val = rating(o, o_tot).T
             else:
                 raise AssertionError(f'Parameter mode needs to be str "cont", "binary" or "rating" not {mode}')
 
@@ -308,6 +317,31 @@ class RS(_RecommenderInit):
                 self._interaction[matrix] = self.get_interaction(method, mode, recommender)
 
         return self._interaction[matrix]
+    
+
+@np.vectorize
+def rating(o, o_tot, m = 10, omega = 1/3):
+    """
+    Product rating for each user
+    :param o: np.array of number of orders for each product
+    :param o_tot: np.array of the total number of orders per user (must have same length as `o`)
+    :param m: parameter of how strongly low amount of purchases counts in the rating (if m is high, then lower purchases counts less)
+    :param omega: parameter how to weight the first purchse. The rest adjusts automatically that the result is always between 0 and 1
+    
+    Calculates a user-product rating considering number of purchases of a product and number of all purchases per user
+    """
+    if o == 0:
+        x = 0
+    elif o == 1:
+        x = omega
+    else:
+        if o_tot < m:
+            w_freq = np.sqrt(o_tot / m)
+        else:
+            w_freq = 1
+        w_prod = np.sqrt(o / o_tot)
+        x = omega + (1-omega) * w_prod * w_freq
+    return x
 
 
 if __name__ == '__main__':
