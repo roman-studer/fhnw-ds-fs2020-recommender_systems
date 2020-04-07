@@ -93,10 +93,8 @@ class RS(_RecommenderInit):
             # csr_matrix for user-user or csc_matrix for item-item
             if recommender == 'user':
                 df = csr_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
-                print(df)
             elif recommender == 'item':
                 df = csc_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
-                print(df)
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
 
@@ -323,8 +321,7 @@ if __name__ == '__main__':
     rs = RS()
     rs.get_interaction()
     # rs.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-    rs.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',
-                       recommender='item')
+    rs.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
