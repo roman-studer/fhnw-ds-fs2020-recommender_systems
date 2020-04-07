@@ -66,22 +66,21 @@ class RS(_RecommenderInit):
         # create interaction_matrix
         else:
             # get data
-            self.DA.get_df_sub(method)
-            df = self.DA._df_sub_data[method]
+            df_sub = self.DA.get_df_sub(method)
 
             # create interaction matrix
-            user_c = CategoricalDtype(sorted(df.user_id.unique()), ordered=True)
-            product_name_c = CategoricalDtype(sorted(df.product_name.unique()), ordered=True)
+            user_c = CategoricalDtype(sorted(df_sub.user_id.unique()), ordered=True)
+            product_name_c = CategoricalDtype(sorted(df_sub.product_name.unique()), ordered=True)
 
-            row = df.user_id.astype(user_c).cat.codes
-            col = df.product_name.astype(product_name_c).cat.codes
+            row = df_sub.user_id.astype(user_c).cat.codes
+            col = df_sub.product_name.astype(product_name_c).cat.codes
             if mode == 'count' or mode == 'binary':
                 val = [1] * len(col)
             elif mode == 'rating':
                 #creates the number of orders per unique product
-                df_o = df.groupby(by = ['user_id', 'product_name']).count().rename(columns = {'order_id':'o'}).reset_index()
+                df_o = df_sub.groupby(by = ['user_id', 'product_name']).count().rename(columns = {'order_id':'o'}).reset_index()
                 #creates the total number of orders from a user
-                o_tot = df.groupby(by = ['user_id'])['order_id'].nunique()
+                o_tot = df_sub.groupby(by = ['user_id'])['order_id'].nunique()
                 #creates a new dataframe where user_id, product_id, o, o_tot
                 df_rating = df_o.join(o_tot, on = 'user_id').rename(columns = {'order_id':'o_tot'})
                 #generates the rating for val
@@ -321,10 +320,10 @@ def rating(o, o_tot, m = 10, omega = 1/3):
 
 
 if __name__ == '__main__':
-    B = RS()
-    B.get_interaction()
-    # B.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-    B.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',
+    rs = RS()
+    rs.get_interaction()
+    # rs.similarity(mode='count', method='rating', sim='cosine', recommender='item')
+    rs.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',
                        recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
