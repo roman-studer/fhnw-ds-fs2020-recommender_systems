@@ -226,7 +226,7 @@ class RS(_RecommenderInit):
     def fit(self, df_train):
         return None
 
-    def recommend_table(self, nr_of_items, mode, method, recommender):
+    def recommend_table(self, nr_of_items, mode, method, recommender, sim='cosine'):
         try:
             # Read from csv
             df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
@@ -235,7 +235,9 @@ class RS(_RecommenderInit):
             if os.path.exists(path):
                 matrix = pickle.load(open(path, "rb"))
             else:
-                return print("File doesn't exist")
+                self.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
+                print("Create similarity matrix")
+                matrix = pickle.load(open(path, "rb"))
 
             # Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
             np.fill_diagonal(matrix, -2)
