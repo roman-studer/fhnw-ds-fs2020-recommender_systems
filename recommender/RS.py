@@ -3,6 +3,8 @@
 import pandas as pd
 import numpy as np
 import pickle
+
+from numpy.core._multiarray_umath import ndarray
 from scipy.sparse import csr_matrix, csc_matrix
 from scipy.sparse.linalg import norm
 from pandas.api.types import CategoricalDtype
@@ -46,8 +48,8 @@ class RS(_RecommenderInit):
                              aisle_rating_user: None, rating_binary_user: None,
                              rating_count_user: None, rating_rating_user: None}
 
-        cosine, pearson = 'cosine', 'pearson'
-        self._similarity_method = {cosine: self.sim_cosine, pearson: self.sim_pearson}
+        cosine, pearson, jaccard = 'cosine', 'pearson', 'jaccard'
+        self._similarity_method = {cosine: self.sim_cosine, pearson: self.sim_pearson, jaccard: self.sim_jaccard}
 
     def get_interaction(self, method='freq', mode='binary', recommender='item'):
         """
@@ -196,6 +198,51 @@ class RS(_RecommenderInit):
 
                 s = numerator / denominator
                 similarity_matrix[i, :] = s
+
+        return similarity_matrix
+
+    @staticmethod
+    def sim_jaccard(df, recommender):
+        """
+        Calculates the jaccard similarity between two given sets(vectors) (usful for binary ratings in interaction matrix)
+        :param df: sparse matrix with shape (user,item)
+        :return s: similarity value between -1 and 1 (1 high correlation, 0 no correlation, -1 high negative correlation)
+        """
+        if recommender == 'item':
+            # initalize empty similarity_matrix:
+            length = df.shape[0]  # length of user vector
+            item_length = df.shape[1]  # length of item vector
+
+            similarity_matrix: ndarray = np.zeros((length, length), dtype=np.float32)  # empty similarity matrix
+
+            for i in np.arange(length):
+                # calculate item overlap between user i and every other user (list of lists)
+                numerator = [
+                    len([index for index, v, u in zip(np.arange(item_length), df[:, i], df[:, x]) if v > 0 and u > 0])
+                    for x in np.arange(length)]
+                denominator = [len(np.unique(np.array(
+                    [index for index, v, u in zip(np.arange(item_length), df[:, i], df[:, x]) if v > 0 or u > 0]))) for
+                               x in np.arange(length)]
+                s = [numerator[i] / denominator[i] for i in np.arange(len(numerator))]
+                similarity_matrix[i, :] = s
+
+        elif recommender == 'user':
+            # initalize empty similarity_matrix:
+            length = df.shape[1]  # length of user vector
+            item_length = df.shape[0]  # length of item vector
+
+            similarity_matrix = np.zeros((length, length), dtype=np.float32)  # empty similarity matrix
+
+            for i in np.arange(length):
+                # calculate item overlap between user i and every other user (list of lists)
+                numerator = [
+                    len([index for index, v, u in zip(np.arange(item_length), df[:, i], df[:, x]) if v > 0 and u > 0])
+                    for x in np.arange(length)]
+                denominator = [len(np.unique(np.array(
+                    [index for index, v, u in zip(np.arange(item_length), df[:, i], df[:, x]) if v > 0 or u > 0]))) for
+                               x in np.arange(length)]
+                s = [numerator[i] / denominator[i] for i in np.arange(len(numerator))]
+                similarity_matrix[:, i] = s
 
         return similarity_matrix
 
