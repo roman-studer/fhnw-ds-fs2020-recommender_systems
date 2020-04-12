@@ -5,7 +5,6 @@ Created on Thu Feb 27 19:25:15 2020
 @author: Lukas
 """
 import pandas as pd
-import numpy as np
 import os
 from pathlib import Path
 
@@ -32,7 +31,7 @@ class DA(object):
     def __init__(self):
         self._df_origin = None
         self._nav = None
-        freq, aisle, rating, binary, count_int = 'freq', 'aisle', 'rating', 'binary', 'count_int'
+        freq, aisle, rating = 'freq', 'aisle', 'rating'
         self._df_sub_data = {freq: None, aisle: None, rating: None}
         self._df_sub_methods = {freq: self._red_prod_freq,
                                 aisle: self._red_prod_aisle,
@@ -166,7 +165,7 @@ class DA(object):
     def get_df_sub(self, method='freq'):
         """Lazy loader of the sub dataset"""
         if not isinstance(self._df_sub_data[method], pd.DataFrame):
-            path = self._nav + method + '.csv'
+            path = self._nav + 'sub/' + method + '.csv'
             if os.path.exists(path):
                 self._df_sub_data[method] = pd.read_csv(path)
             else:

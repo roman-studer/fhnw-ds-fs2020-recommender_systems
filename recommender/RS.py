@@ -39,7 +39,7 @@ class RS(_RecommenderInit):
         :return: numpy array
         """
         # check if interaction matrix already exists:
-        path = self._da.get_nav() + method + '_' + mode + '_' + recommender + '_interaction.pkl'
+        path = self._da.get_nav() + 'interaction/' + method + '_' + mode + '_' + recommender + '_interaction.pkl'
         if os.path.exists(path):
             interaction_matrix = pickle.load(open(path, "rb"))
 
@@ -146,7 +146,7 @@ class RS(_RecommenderInit):
         :return similarity_matrix: nxn-Matrix containing the similarity values for every value pair
         """
         # check if user-user or item-item matrix already exists
-        path_sim = self._da.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+        path_sim = self._da.get_nav() + 'similarity/' + method + '_' + mode + '_' + recommender + '_similarity.pkl'
         if os.path.exists(path_sim):
             similarity_matrix = pickle.load(open(path_sim, 'rb'))
 
@@ -276,9 +276,10 @@ class RS(_RecommenderInit):
         return df_train, df_test
 
     def recommend_table(self, nr_of_items, mode, method, recommender, sim='cosine'):
+        path = self._da.get_nav() + 'recommendation/' + method + '_' + mode + '_' + recommender + '_recommendation.csv'
         try:
             # Read from csv
-            df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+            df = pd.read_csv(path)
         except:
             matrix = self.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
 
@@ -306,16 +307,13 @@ class RS(_RecommenderInit):
                 df = df.replace(i, tags.iloc[i][0])
 
             # Write to csv
-            df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
+            df.to_csv(path, index=False, header=True)
             
         return df
 
     def single_recommend(self, product_name, nr_of_items, method, mode, recommender):
         # Read from csv
-        try:
-            df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
-        except:
-            df = self.recommend_table(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender)
+        df = self.recommend_table(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender)
 
         item_id = np.where(df["Recommendation for product:"] == product_name)[0][0]
 
