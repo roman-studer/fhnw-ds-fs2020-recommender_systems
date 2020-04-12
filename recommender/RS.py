@@ -21,37 +21,16 @@ class RS(_RecommenderInit):
     """
 
     def __init__(self):
-        super().__init__()  # maybe not necessary
-        self.DA = DA.get_DA()
-
-        # is self.data and self._param still necessary?
-        '''self.data = data
-        self._param = param  # maybe store some parameter when initializing object? idk'''
-
-        binary_freq, binary_aisle, binary_rating, count_int_freq, count_int_aisle, count_int_rating = \
-            'binary_freq', 'binary_asile', 'binary_rating', 'count_int_freq', 'count_int_aisle', 'count_int_rating'
-
-        freq_binary_item, freq_count_item, freq_rating_item, aisle_binary_item, aisle_count_item, \
-        aisle_rating_item, rating_binary_item, rating_count_item, rating_rating_item, \
-        freq_binary_user, freq_count_user, freq_rating_user, aisle_binary_user, \
-        aisle_count_user, aisle_rating_user, rating_binary_user, rating_count_user, rating_rating_user = \
-            'freq_binary_item', 'freq_count_item', 'freq_rating_item', 'aisle_binary_item', 'aisle_count_item', \
-            'aisle_rating_item', 'rating_binary_item', 'rating_count_item', 'rating_rating_item', \
-            'freq_binary_user', 'freq_count_user', 'freq_rating_user', 'aisle_binary_user', \
-            'aisle_count_user', 'aisle_rating_user', 'rating_binary_user', 'rating_count_user', 'rating_rating_user'
-
-        self._interaction = {freq_binary_item: None, freq_count_item: None, freq_rating_item: None,
-                             aisle_binary_item: None, aisle_count_item: None,
-                             aisle_rating_item: None, rating_binary_item: None, rating_count_item: None,
-                             rating_rating_item: None, freq_binary_user: None, freq_count_user: None,
-                             freq_rating_user: None, aisle_binary_user: None, aisle_count_user: None,
-                             aisle_rating_user: None, rating_binary_user: None,
-                             rating_count_user: None, rating_rating_user: None}
-
+        super().__init__()
+        self._da = DA.get_DA()
+        
         cosine, pearson, jaccard = 'cosine', 'pearson', 'jaccard'
-        self._similarity_method = {cosine: self.sim_cosine, pearson: self.sim_pearson, jaccard: self.sim_jaccard}
+        self._similarity_method = {cosine: RS.sim_cosine, pearson: RS.sim_pearson, jaccard: RS.sim_jaccard}
+        
+        self._interaction_matrix = None
+        self._interaction_method, self._interaction_mode, self._interaction_recommender = None, None, None
 
-    def get_interaction(self, method='freq', mode='binary', recommender='item'):
+    def _get_df_interaction(self, method, mode, recommender):
         """
         Creates an interaction matrix with shape (users,products)
         :param method: selects the method to reduce the dataframe (see product description)
@@ -60,15 +39,14 @@ class RS(_RecommenderInit):
         :return: numpy array
         """
         # check if interaction matrix already exists:
-        path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_interaction.pkl'
-        matrix = method + '_' + mode + '_' + recommender
+        path = self._da.get_nav() + method + '_' + mode + '_' + recommender + '_interaction.pkl'
         if os.path.exists(path):
-            self._interaction[matrix] = pickle.load(open(path, "rb"))
+            interaction_matrix = pickle.load(open(path, "rb"))
 
         # create interaction_matrix
         else:
             # get data
-            df_sub = self.DA.get_df_sub(method)
+            df_sub = self._da.get_df_sub(method)
 
             # create interaction matrix
             user_c = CategoricalDtype(sorted(df_sub.user_id.unique()), ordered=True)
@@ -88,7 +66,7 @@ class RS(_RecommenderInit):
                 #generates the rating for val
                 o = df_rating.loc[:, 'o'].to_numpy()
                 o_tot = df_rating.loc[:, 'o_tot'].to_numpy()
-                val = rating(o, o_tot).T
+                val = self._rating(o, o_tot).T
             else:
                 raise AssertionError(f'Parameter mode needs to be str "cont", "binary" or "rating" not {mode}')
 
@@ -103,19 +81,55 @@ class RS(_RecommenderInit):
             if mode == 'binary':
                 df[df.nonzero()] = 1  # sets every value in the interaction matrix to 1 if value > 0
 
-            self._interaction[matrix] = df
+            interaction_matrix = df
 
             # save interaction matrix
             pickle.dump(df, open(path, "wb"))
 
-        return self._interaction[matrix]
+        return interaction_matrix
+    
+    @np.vectorize
+    def _rating(self, o, o_tot, m = 10, omega = 1/3):
+        """
+        Product rating for each user
+        :param o: np.array of number of orders for each product
+        :param o_tot: np.array of the total number of orders per user (must have same length as `o`)
+        :param m: parameter of how strongly low amount of purchases counts in the rating (if m is high, then lower purchases counts less)
+        :param omega: parameter how to weight the first purchse. The rest adjusts automatically that the result is always between 0 and 1
+        
+        Calculates a user-product rating considering number of purchases of a product and number of all purchases per user
+        """
+        if o == 0:
+            x = 0
+        elif o == 1:
+            x = omega
+        else:
+            if o_tot < m:
+                w_freq = np.sqrt(o_tot / m)
+            else:
+                w_freq = 1
+            w_prod = np.sqrt(o / o_tot)
+            x = omega + (1-omega) * w_prod * w_freq
+        return x
+    
+    def get_interaction(self, method='freq', mode='binary', recommender='item'):
+        """Lazy loader of the interaction matrix"""
+        if isinstance(self._interaction_matrix, (csc_matrix, csr_matrix)) and\
+        method == self._interaction_method and mode == self._interaction_mode and recommender == self._interaction_recommender:
+            pass #nothing toDo here, correct matrix is already in self._interaction_matrix
+        else:
+            self._interaction_matrix = self._get_df_interaction(method, mode, recommender)
+            self._interaction_method = method
+            self._interaction_mode = mode
+            self._interaction_recommender = recommender
+
+        return self._interaction_matrix
 
     def product_names(self, method='freq'):
         """
         returns a list of products contained in the df. The index is the corresponding index number in the similarity matrix.
         """
-        self.DA.get_df_sub(method)
-        df = self.DA._df_sub_data[method]
+        df = self._da.get_df_sub(method)
         product = pd.DataFrame(sorted(df.product_name.unique()))
 
         return product
@@ -132,22 +146,14 @@ class RS(_RecommenderInit):
         :return similarity_matrix: nxn-Matrix containing the similarity values for every value pair
         """
         # check if user-user or item-item matrix already exists
-        path_sim = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+        path_sim = self._da.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
         if os.path.exists(path_sim):
             similarity_matrix = pickle.load(open(path_sim, 'rb'))
 
         # check if interaction matrix already exists:
         else:
-            path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_interaction.pkl'
-            matrix = method + '_' + mode + '_' + recommender
-            if os.path.exists(path):
-                self._interaction[matrix] = pickle.load(open(path, "rb"))
-            else:
-                # load correct df here
-                self.get_df_interaction(method, mode, recommender)
-
-            similarity_matrix = self._similarity_method[sim](self._interaction[matrix], recommender)
-
+            df_interaction = self.get_interaction(method, mode, recommender)
+            similarity_matrix = self._similarity_method[sim](df_interaction, recommender)
             pickle.dump(similarity_matrix, open(path_sim, 'wb'))
 
         return similarity_matrix
@@ -266,23 +272,15 @@ class RS(_RecommenderInit):
     def train_test(self, data):
         # TO DO: maybe move to _RecommenderInit
         # splits data into train_test if necessary
+        df_train, df_test = None, None
         return df_train, df_test
-
-    def fit(self, df_train):
-        return None
 
     def recommend_table(self, nr_of_items, mode, method, recommender, sim='cosine'):
         try:
             # Read from csv
             df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
         except:
-            path = self.DA.get_nav() + method + '_' + mode + '_' + recommender + '_similarity.pkl'
-            if os.path.exists(path):
-                matrix = pickle.load(open(path, "rb"))
-            else:
-                self.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
-                print("Create similarity matrix")
-                matrix = pickle.load(open(path, "rb"))
+            matrix = self.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
 
             # Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
             np.fill_diagonal(matrix, -2)
@@ -309,15 +307,15 @@ class RS(_RecommenderInit):
 
             # Write to csv
             df.to_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv', index=False, header=True)
-        return
+            
+        return df
 
     def single_recommend(self, product_name, nr_of_items, method, mode, recommender):
         # Read from csv
         try:
             df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
         except:
-            self.recommend_table(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender)
-            df = pd.read_csv(method + '_' + mode + '_' + recommender + '_' + 'recommendation.csv')
+            df = self.recommend_table(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender)
 
         item_id = np.where(df["Recommendation for product:"] == product_name)[0][0]
 
@@ -326,44 +324,8 @@ class RS(_RecommenderInit):
         for i in range((df.shape[1] // 2)):
             print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i + 1],
                                                                   round(df.iloc[item_id][df.shape[1] // 2 + i + 1], 3)))
-        return
-
-    def get_df_interaction(self, method, mode, recommender):
-        """Lazy loader of the interaction matrix"""
-        matrix = method + '_' + mode + '_' + recommender
-        if not isinstance(self._interaction[matrix], (csc_matrix, csr_matrix)):
-            path = self.DA.get_nav() + matrix + '_interaction.pkl'
-            if os.path.exists(path):
-                self._interaction[matrix] = pickle.load(open(path, 'rb'))
-            else:
-                self._interaction[matrix] = self.get_interaction(method, mode, recommender)
-
-        return self._interaction[matrix]
-    
-
-@np.vectorize
-def rating(o, o_tot, m = 10, omega = 1/3):
-    """
-    Product rating for each user
-    :param o: np.array of number of orders for each product
-    :param o_tot: np.array of the total number of orders per user (must have same length as `o`)
-    :param m: parameter of how strongly low amount of purchases counts in the rating (if m is high, then lower purchases counts less)
-    :param omega: parameter how to weight the first purchse. The rest adjusts automatically that the result is always between 0 and 1
-    
-    Calculates a user-product rating considering number of purchases of a product and number of all purchases per user
-    """
-    if o == 0:
-        x = 0
-    elif o == 1:
-        x = omega
-    else:
-        if o_tot < m:
-            w_freq = np.sqrt(o_tot / m)
-        else:
-            w_freq = 1
-        w_prod = np.sqrt(o / o_tot)
-        x = omega + (1-omega) * w_prod * w_freq
-    return x
+        
+        return item_id
 
 
 if __name__ == '__main__':
