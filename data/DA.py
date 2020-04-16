@@ -46,7 +46,6 @@ class DA(object):
         items = products[:ix].keys()
         df_selected = df[df['product_name'].isin(items)]
         df_selected = self.drop_user(df_selected)
-        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
         return df_selected.reset_index(drop=True)
 
     def _red_prod_aisle(self, drop=0.8):
@@ -57,7 +56,6 @@ class DA(object):
         for aisle_id, group in df_grouped:
             df_selected = df_selected.append(self._red_prod_freq(group, drop))
         df_selected = self.drop_user(df_selected)
-        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
 
         return df_selected
 
@@ -99,7 +97,6 @@ class DA(object):
         items = products[:ix].values
         df_selected = df[df[product_name].isin(items)]
         df_selected = self.drop_user(df_selected)
-        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
 
         return df_selected.reset_index(drop=True)
 
@@ -169,7 +166,8 @@ class DA(object):
             if os.path.exists(path):
                 self._df_sub_data[method] = pd.read_csv(path)
             else:
-                self._df_sub_data[method] = self._df_sub_methods[method]()
+                df_sub = self._df_sub_methods[method]()
+                self._df_sub_data[method] = df_sub.loc[:, ['user_id', 'order_id', 'product_name']]
                 self._df_sub_data[method].to_csv(path, index=False)
         return self._df_sub_data[method]
 

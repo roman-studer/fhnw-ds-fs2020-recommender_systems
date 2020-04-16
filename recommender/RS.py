@@ -45,50 +45,47 @@ class RS(_RecommenderInit):
 
         # create interaction_matrix
         else:
-            # get data
             df_sub = self._da.get_df_sub(method)
-
-            # create interaction matrix
-            user_c = CategoricalDtype(sorted(df_sub.user_id.unique()), ordered=True)
-            product_name_c = CategoricalDtype(sorted(df_sub.product_name.unique()), ordered=True)
-
-            row = df_sub.user_id.astype(user_c).cat.codes
-            col = df_sub.product_name.astype(product_name_c).cat.codes
-            if mode == 'count' or mode == 'binary':
-                val = [1] * len(col)
+     
+            #creates the number of orders per unique product
+            df_o = df_sub.groupby(by = ['user_id', 'product_name']).count().rename(columns = {'order_id':'o'}).reset_index()
+            #creates the total number of orders from a user
+            o_tot = df_sub.groupby(by = ['user_id'])['order_id'].nunique()
+            #creates a new dataframe where user_id, product_id, o, o_tot
+            df_orders = df_o.join(o_tot, on = 'user_id').rename(columns = {'order_id':'o_tot'})
+            #generates the rating for val
+            o = df_orders.loc[:, 'o'].to_numpy()
+            
+            if mode == 'count':
+                val = o
+            elif mode == 'binary':
+                val = [1] * len(o)
             elif mode == 'rating':
-                #creates the number of orders per unique product
-                df_o = df_sub.groupby(by = ['user_id', 'product_name']).count().rename(columns = {'order_id':'o'}).reset_index()
-                #creates the total number of orders from a user
-                o_tot = df_sub.groupby(by = ['user_id'])['order_id'].nunique()
-                #creates a new dataframe where user_id, product_id, o, o_tot
-                df_rating = df_o.join(o_tot, on = 'user_id').rename(columns = {'order_id':'o_tot'})
-                #generates the rating for val
-                o = df_rating.loc[:, 'o'].to_numpy()
-                o_tot = df_rating.loc[:, 'o_tot'].to_numpy()
-                val = self._rating(o, o_tot).T
+                o_tot = df_orders.loc[:, 'o_tot'].to_numpy()
+                rating_fun = np.vectorize(self._rating)
+                val = rating_fun(o = o, o_tot = o_tot).T
             else:
                 raise AssertionError(f'Parameter mode needs to be str "cont", "binary" or "rating" not {mode}')
+                    
+            user_c = CategoricalDtype(sorted(df_orders.user_id.unique()), ordered=True)
+            product_name_c = CategoricalDtype(sorted(df_orders.product_name.unique()), ordered=True)
+
+            row = df_orders.user_id.astype(user_c).cat.codes
+            col = df_orders.product_name.astype(product_name_c).cat.codes
 
             # csr_matrix for user-user or csc_matrix for item-item
             if recommender == 'user':
-                df = csr_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
+                interaction_matrix = csr_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
             elif recommender == 'item':
-                df = csc_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
+                interaction_matrix = csc_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
 
-            if mode == 'binary':
-                df[df.nonzero()] = 1  # sets every value in the interaction matrix to 1 if value > 0
-
-            interaction_matrix = df
-
             # save interaction matrix
-            pickle.dump(df, open(path, "wb"))
+            pickle.dump(interaction_matrix, open(path, "wb"))
 
         return interaction_matrix
     
-    @np.vectorize
     def _rating(self, o, o_tot, m = 10, omega = 1/3):
         """
         Product rating for each user
@@ -330,7 +327,7 @@ if __name__ == '__main__':
     rs = RS()
     rs.get_interaction()
     # rs.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-    rs.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',recommender='item')
+    rs.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='freq', mode='rating',recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
