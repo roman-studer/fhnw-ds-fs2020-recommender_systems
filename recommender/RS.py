@@ -2,7 +2,7 @@
 
 import pandas as pd
 import numpy as np
-import pickle
+import pickle, json
 
 from numpy.core._multiarray_umath import ndarray
 from scipy.sparse import csr_matrix, csc_matrix
@@ -39,7 +39,8 @@ class RS(_RecommenderInit):
         :return: numpy array
         """
         # check if interaction matrix already exists:
-        path = self._da.get_nav() + 'interaction/' + method + '_' + mode + '_' + recommender + '_interaction.pkl'
+        path_prefix = self._da.get_nav() + 'interaction/' + method + '_' + mode + '_' + recommender
+        path = path_prefix + '_interaction.pkl'
         if os.path.exists(path):
             interaction_matrix = pickle.load(open(path, "rb"))
 
@@ -81,8 +82,15 @@ class RS(_RecommenderInit):
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
 
-            # save interaction matrix
+            # stores interaction matrix
             pickle.dump(interaction_matrix, open(path, "wb"))
+            # stores the according dependencies of products and users as {index : user_id/product_name}
+            products = dict(enumerate(product_name_c.categories))
+            products_path = path_prefix + '_products.json'
+            users_path = path_prefix + '_users.json'
+            users = dict(enumerate(user_c.categories))
+            json.dump(products, open(products_path, 'w'))
+            json.dump(users, open(users_path, 'w'))
 
         return interaction_matrix
     

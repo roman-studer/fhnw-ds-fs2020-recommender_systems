@@ -134,6 +134,7 @@ CODEOWNERS
 # Data objects
 *.csv
 *.pkl
+*.json
 
 # IDE dependencies
 .idea
