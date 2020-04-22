@@ -39,8 +39,9 @@ class RS(_RecommenderInit):
         :return: numpy array
         """
         # check if interaction matrix already exists:
-        path_prefix = self._da.get_nav() + 'interaction/' + method + '_' + mode + '_' + recommender
-        path = path_prefix + '_interaction.pkl'
+        path_prefix = self._da.get_nav() + 'interaction/'
+        filename_prefix = method + '_' + mode + '_' + recommender
+        path = path_prefix + filename_prefix + '_interaction.pkl'
         if os.path.exists(path):
             interaction_matrix = pickle.load(open(path, "rb"))
 
@@ -86,8 +87,8 @@ class RS(_RecommenderInit):
             pickle.dump(interaction_matrix, open(path, "wb"))
             # stores the according dependencies of products and users as {index : user_id/product_name}
             products = dict(enumerate(product_name_c.categories))
-            products_path = path_prefix + '_products.json'
-            users_path = path_prefix + '_users.json'
+            products_path = path_prefix + 'products/' + filename_prefix + '_products.json'
+            users_path = path_prefix + 'users/' + filename_prefix + '_users.json'
             users = dict(enumerate(user_c.categories))
             json.dump(products, open(products_path, 'w'))
             json.dump(users, open(users_path, 'w'))
@@ -341,10 +342,9 @@ class RS(_RecommenderInit):
 
 if __name__ == '__main__':
     rs = RS()
-    rs.get_interaction()
     # rs.similarity(mode='count', method='rating', sim='cosine', recommender='item')
     # rs.n_nearest_items(nr_of_items=15, method='rating', mode='count',recommender='item')
-    rs.single_product(product_name="#2 Coffee Filters", nr_of_items=15, method='rating', mode='count',
+    rs.single_product(product_name="#2 Coffee Filters", nr_of_items=15, method='freq', mode='rating',
                       recommender='item')
 
 # old interaction function, new one uses a sparse matrix for better performance
