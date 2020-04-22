@@ -282,7 +282,7 @@ class RS(_RecommenderInit):
 
 
     def n_nearest_items(self, nr_of_items, mode, method, recommender, sim='cosine'):
-        path = self._da.get_nav() + 'recommendation/' + method + '_' + mode + '_' + recommender + '_recommendation.csv'
+        path = self._da.get_nav() + 'similar_items/' + method + '_' + mode + '_' + recommender + '_similar_objects.csv'
 
         # Check if file already exists and if enought similar products are contained
         if os.path.exists(path) and (pd.read_csv(path).shape[1] // 3 >= nr_of_items):
