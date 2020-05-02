@@ -5,7 +5,7 @@ import numpy as np
 import pickle, json
 
 from numpy.core._multiarray_umath import ndarray
-from scipy.sparse import csr_matrix, csc_matrix
+from scipy.sparse import csr_matrix, csc_matrix, coo_matrix, issparse, vstack
 from scipy.sparse.linalg import norm
 from pandas.api.types import CategoricalDtype
 from recommender._Recommender_Init import _RecommenderInit
@@ -39,8 +39,9 @@ class RS(_RecommenderInit):
         :return: numpy array
         """
         # check if interaction matrix already exists:
-        path_prefix = self._da.get_nav() + 'interaction/' + method + '_' + mode + '_' + recommender
-        path = path_prefix + '_interaction.pkl'
+        path_prefix = self._da.get_nav() + 'interaction/'
+        filename_prefix = method + '_' + mode + '_' + recommender
+        path = path_prefix + filename_prefix + '_interaction.pkl'
         if os.path.exists(path):
             interaction_matrix = pickle.load(open(path, "rb"))
 
@@ -86,8 +87,8 @@ class RS(_RecommenderInit):
             pickle.dump(interaction_matrix, open(path, "wb"))
             # stores the according dependencies of products and users as {index : user_id/product_name}
             products = dict(enumerate(product_name_c.categories))
-            products_path = path_prefix + '_products.json'
-            users_path = path_prefix + '_users.json'
+            products_path = path_prefix + 'products/' + filename_prefix + '_products.json'
+            users_path = path_prefix + 'users/' + filename_prefix + '_users.json'
             users = dict(enumerate(user_c.categories))
             json.dump(products, open(products_path, 'w'))
             json.dump(users, open(users_path, 'w'))
@@ -280,62 +281,164 @@ class RS(_RecommenderInit):
         df_train, df_test = None, None
         return df_train, df_test
 
-    def recommend_table(self, nr_of_items, mode, method, recommender, sim='cosine'):
-        path = self._da.get_nav() + 'recommendation/' + method + '_' + mode + '_' + recommender + '_recommendation.csv'
-        try:
-            # Read from csv
-            df = pd.read_csv(path)
-        except:
-            matrix = self.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
 
-            # Sets diagonal to zero (if we dont want to recomend the item the user has just bought)
-            np.fill_diagonal(matrix, -2)
+    def n_nearest_items(self, nr_of_items, mode, method, recommender, sim='cosine'):
+        path = self._da.get_nav() + 'similar_items/' + method + '_' + mode + '_' + recommender + '_similar_objects.csv'
+
+        # Check if file already exists and if enought similar products are contained
+        if os.path.exists(path) and (pd.read_csv(path).shape[1] // 3 >= nr_of_items):
+            df = pd.read_csv(path)
+
+        # Create file if it doesn't exists
+        else:
+            similarity_matrix = self.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
+
+            # Sets diagonal to -2 (if we dont want to recomend the item the user has just bought)
+            np.fill_diagonal(similarity_matrix, -2)
 
             # gets two list of item index and item similarity rating
-            nr_of_rows = matrix.shape[0]
+            nr_of_rows = similarity_matrix.shape[0]
             index = np.zeros((nr_of_rows, nr_of_items))
-            ratings = np.zeros((nr_of_rows, nr_of_items))
+            similarity = np.zeros((nr_of_rows, nr_of_items))
             for row in range(nr_of_rows):
-                index[row, :] = matrix[row].argsort()[-nr_of_items:][::-1].tolist()
-                ratings[row, :] = matrix[row, index[row, :].astype(int)]
+                index[row, :] = similarity_matrix[row].argsort()[-nr_of_items:][::-1].tolist()
+                similarity[row, :] = similarity_matrix[row, index[row, :].astype(int)]
 
             tags = self.product_names(method=method)
 
             # Create dataframe
             df_products = pd.DataFrame(index.astype(int),
-                                       columns=(['Match {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+                                       columns=(['Product {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
             df_products.insert(0, "Recommendation for product:", df_products.index)
-            df_similarity = pd.DataFrame(ratings, columns=(
+            for i in range(len(tags)):  # Replace product id with product names
+                df_products = df_products.replace(i, tags.iloc[i][0])
+
+            df_id = pd.DataFrame(index.astype(int),
+                                 columns=(['id {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
+
+            df_similarity = pd.DataFrame(similarity, columns=(
                 ['Similarity {}.'.format(s) for s in np.arange(1, nr_of_items + 1, 1)]))
-            df = pd.concat([df_products, df_similarity], axis=1, sort=False)
-            for i in range(len(tags)):
-                df = df.replace(i, tags.iloc[i][0])
+            df = pd.concat([df_products, df_id, df_similarity], axis=1, sort=False)
+            df.insert(0, 'id', df_products.index)
 
             # Write to csv
             df.to_csv(path, index=False, header=True)
-            
         return df
+    
 
-    def single_recommend(self, product_name, nr_of_items, method, mode, recommender):
+    def single_product(self, product_name, nr_of_items, method, mode, recommender, sim='cosine'):
         # Read from csv
-        df = self.recommend_table(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender)
+        df = self.n_nearest_items(nr_of_items=nr_of_items, mode=mode, method=method, recommender=recommender, sim=sim)
 
         item_id = np.where(df["Recommendation for product:"] == product_name)[0][0]
 
         # print results
         print("Recommendation for {}: \n".format(df.iloc[item_id][0]))
-        for i in range((df.shape[1] // 2)):
-            print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i + 1],
-                                                                  round(df.iloc[item_id][df.shape[1] // 2 + i + 1], 3)))
-        
+        for i in range(nr_of_items):
+            print("{}: {} with a similarity rating of {} ".format((i + 1), df.iloc[item_id][i + 1], round(
+                df.iloc[item_id][(df.shape[1] // 3) * 2 + i + 2], 3)))
+
         return item_id
+    
+    
+    def predict(self, R, nr_of_items, mode, method, sim='cosine'):
+        """
+        IBCF predictions for each given user in `R`
+        
+        :param R: users to predict recommendations, usually the interaction matrix (user/item), either: pd.DataFrame, np.ndarray, np.matrix or scipy.sparse matrix
+        :param nr_of_items: number of similar items to consider (only necessary if mode is 'rating' or 'count')
+        :param method: method chosen of how `R` was created. 'rating'/'count' will result in equation 2.8, 'binary' will result in equation 2.10
+        
+        :returns: -scipy.sparse coo_matrix if `method` was 'rating' or 'count'
+                  - np.array if `method` was 'binary' (float32)
+        """
+        predictions = None
+        recommender = 'item'
+        S = self.similarity(method, mode, sim, recommender)
+        
+        # convert R to sparse column matrix if not already done
+        if isinstance(R, pd.DataFrame):
+            R = csc_matrix(R.values)
+        elif isinstance(R, np.matrix) or isinstance(R, np.ndarray):
+            R = csc_matrix(R)
+        elif issparse(R):
+            pass
+        
+        if mode == 'rating' or mode == 'count':
+            """This mode works if the rating is NOT unary AND
+            when it is NOT possible for similarity scores to be negative when ratings are constrained to be nonnegative.
+            
+            Formula: p_{u,i} = (sum_{j∈S}(s(i,j)*r_{u,j})) / (sum_{j∈S}(abs(s(i,j)))) | S is a set of items similar to i
+            
+            Equation 2.8 shown in:
+            Collaborative Filtering Recommender Systems 2010
+            By Michael D. Ekstrand, John T. Riedl and Joseph A. Konstan"""
+            
+            batchsize = 10000 # tests have shown that this is a good batch size to avoid performance issues
+            df_s = self.n_nearest_items(nr_of_items, mode, method, recommender, sim)
+            df_ix = df_s.iloc[:, 2:]
+            num_items = int(df_ix.shape[1] / 3)
+            s_ix_np = df_ix.iloc[:, num_items:-num_items].to_numpy()
+            sim_product = df_s.iloc[:, -num_items:].to_numpy()
+    
+            # create sparse similarity matrix where for each column the item_i just contains the k nearest similarities
+            # rest is zero for matrix dot product
+            col_ix = np.array([s_ix_np.shape[1] * [i] for i in range(s_ix_np.shape[0])]).ravel()
+            row_ix = s_ix_np.astype(int).ravel()
+            A = np.zeros(S.shape)
+            A[row_ix, col_ix] = 1
+            S = A * S # hadamard product to just keep k similarities
+            S = csr_matrix(S)
+            
+            # perform batchwise predictions
+            i_prev = 0
+            denominators = 1 / np.sum(np.absolute(sim_product), axis = 1)
+            
+            for i in range(batchsize, R.shape[0] + batchsize, batchsize):
+                # batch prep
+                i = min(i, R.shape[0])
+                batch = R[i_prev:i]
+                
+                # numerators
+                batch_predictions = batch.dot(S)
+    
+                # denominators with hadamard product
+                D = np.array([[denominator] * batch_predictions.shape[0] for denominator in denominators]).T
+                batch_predictions = batch_predictions.multiply(D)
+                
+                # append batch to predictions
+                if issparse(predictions):
+                    predictions = vstack([predictions, batch_predictions])
+                else:
+                    predictions = batch_predictions
+                
+                # update slice index
+                i_prev = i
+            
+        elif mode == 'binary':
+            """This mode works only for unary scores.
+            
+            Formula: p_{u,i} = sum_{j∈I_u}(s(i,j)) | I_u is the user's purchase history
+            
+            Equation 2.10 shown in:
+            Collaborative Filtering Recommender Systems 2010
+            By Michael D. Ekstrand, John T. Riedl and Joseph A. Konstan"""
+    
+            # dot product works because summation of similarities which are in I_u is given if rating is unary
+            # and non bought-items are weighted as zero
+            I = coo_matrix(R).tocsr()
+            predictions = np.float32(I.dot(S)) #np.float32 doubles execution time, but reduces memory requirements by half
+        
+        return predictions
 
 
 if __name__ == '__main__':
     rs = RS()
-    rs.get_interaction()
-    # rs.similarity(mode='count', method='rating', sim='cosine', recommender='item')
-    rs.single_recommend(product_name="#2 Coffee Filters", nr_of_items=15, method='freq', mode='rating',recommender='item')
+    mode, method, sim, recommender, nr_of_items = 'rating', 'freq', 'cosine', 'item', 20
+    R = rs.get_interaction(method, mode, recommender)
+    R = R[:10000]
+    predictions = rs.predict(R, nr_of_items, mode, method, sim)
+    print(predictions)
 
 # old interaction function, new one uses a sparse matrix for better performance
 '''    def get_interaction(self, mode='binary', method='freq', pivot=False):
