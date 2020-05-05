@@ -162,7 +162,7 @@ class DA(object):
     def get_df_sub(self, method='freq'):
         """Lazy loader of the sub dataset"""
         if not isinstance(self._df_sub_data[method], pd.DataFrame):
-            path = self._nav + 'sub/' + method + '.csv'
+            path = self.get_nav() + 'sub/' + method + '.csv'
             if os.path.exists(path):
                 self._df_sub_data[method] = pd.read_csv(path)
             else:
@@ -198,3 +198,4 @@ class DA(object):
 
 if __name__ == '__main__':
     A = DA.get_DA()
+    A.get_df_sub(method='count')

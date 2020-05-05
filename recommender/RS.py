@@ -122,7 +122,7 @@ class RS(_RecommenderInit):
         """Lazy loader of the interaction matrix"""
         if isinstance(self._interaction_matrix, (csc_matrix, csr_matrix)) and\
         method == self._interaction_method and mode == self._interaction_mode and recommender == self._interaction_recommender:
-            pass #nothing toDo here, correct matrix is already in self._interaction_matrix
+            pass #nothing to Do here, correct matrix is already in self._interaction_matrix
         else:
             self._interaction_matrix = self._get_df_interaction(method, mode, recommender)
             self._interaction_method = method
@@ -434,7 +434,7 @@ class RS(_RecommenderInit):
 
 if __name__ == '__main__':
     rs = RS()
-    mode, method, sim, recommender, nr_of_items = 'rating', 'freq', 'cosine', 'item', 20
+    mode, method, sim, recommender, nr_of_items = 'count', 'freq', 'cosine', 'item', 20
     R = rs.get_interaction(method, mode, recommender)
     R = R[:10000]
     predictions = rs.predict(R, nr_of_items, mode, method, sim)
