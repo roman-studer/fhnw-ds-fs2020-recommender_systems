@@ -8,7 +8,7 @@ from recommender.RS import RS
 from data.DA import DA
 
 from scipy.sparse import csr_matrix, csc_matrix, issparse
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import numpy as np
 import pandas as pd
@@ -26,8 +26,8 @@ class RecEval(object):
         self.rs = rs
         self.da = da
 
-        mae, nmae = 'mae', 'nmae'
-        self._evaluation_methid = {mae: RecEval.mae, nmae: RecEval.mae}
+        mae, nmae, rmse = 'mae', 'nmae', 'rmse'
+        self._evaluation_methid = {mae: RecEval.mae, nmae: RecEval.mae, rmse: RecEval.rmse}
 
     def evaluate(self, mode, method, sim, recommender, nr_of_items, eval_method, n, output=True):
         """
@@ -202,6 +202,29 @@ class RecEval(object):
 
         return val
 
+    @staticmethod
+    def rmse(df, own=True, output=True):
+        """
+        Evaluation Metric: Calculate root mean squared error for two columns
+        Formula taken from "Collaborative Filtering Recommender Systems by Michael D. Ekstrand et al
+        Equation number: 3.3
+
+        :param own: (bool) use own method ore if False method from sklearn
+        :param output: (bool) print return value
+        :param df: pandas dataframe containing ratings from evaluate function
+        :return val: returns mean absolut error
+        """
+        if own:
+            val = 0
+            for row in df.iterrows():
+                val += (row[1]['prediction'] - row[1]['rating'])**2
+            val = np.sqrt(val/len(df))
+
+        else:
+            val = mean_absolute_error(df['rating'], df['prediction'], squared=False)  # if squared True: Return is MSE
+
+        if output:
+            print(f'RMSE for recommender with method:{method}, mode={mode}, sim={sim} \n {val}')
 
 if __name__ == '__main__':
     Rec = RecEval()
@@ -210,7 +233,7 @@ if __name__ == '__main__':
                                                                            'cosine',
                                                                            'item',
                                                                            20,
-                                                                           'nmae',
+                                                                           'rmse',
                                                                            2,
                                                                            True)
     Rec.evaluate(mode, method, sim, recommender, nr_of_items, eval_method, n, output=True)
