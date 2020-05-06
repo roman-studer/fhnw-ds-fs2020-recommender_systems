@@ -65,6 +65,11 @@ class RecEval(object):
 
         return val
 
+
+    # todo train test split 90/10
+    def train_test(self, df, p):
+
+
     @staticmethod
     def get_last_n_products(df, n):
         """
