@@ -45,17 +45,22 @@ class RecEval(object):
         # reduce data
         df = self.da.get_df_sub(method=method)
 
-        # get_interaction
-        interaction = self.rs.get_interaction(method=method, mode=mode, recommender=recommender)
+        # self.rs.get_interaction(method=method, mode=mode, recommender=recommender)
+
+        # get similarity
+        S = self.rs.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
+
+        # get test_interaction
+        test_interaction = self.rs.get_test_interaction(mode=mode, method=method, recommender=recommender)
 
         # find n last products per user
-        last_products = self.get_last_n_products(df, n)
+        last_products = self.get_last_n_products(df=df, n=2)
 
         # mask ratings for n predefined items
-        last_products, masked_interaction = self.mask_item_rating(table=last_products, df=interaction)
+        last_products, masked_interaction = self.mask_item_rating(table=last_products, df=test_interaction)
 
         # predict
-        predictions = self.rs.predict(masked_interaction, nr_of_items=nr_of_items, mode=mode, method=method, sim=sim)
+        predictions = self.rs.predict(R=masked_interaction, S=S, nr_of_items=nr_of_items, mode=mode, method=method, sim=sim)
 
         # get prediction rating
         last_products = self.get_prediction_rating(table=last_products, predictions=predictions)
@@ -66,9 +71,7 @@ class RecEval(object):
         return val
 
 
-    # todo train test split 90/10
-    def train_test(self, df, p):
-        pass
+
 
     @staticmethod
     def get_last_n_products(df, n):
@@ -89,13 +92,16 @@ class RecEval(object):
         # load json
         inv_products = json.load(
             open(f'../data/interaction/products/{method}_{mode}_{recommender}_products.json', 'rb'))
-        inv_users = json.load(open(f'../data/interaction/users/{method}_{mode}_{recommender}_users.json', 'rb'))
+        inv_users = json.load(open(f'../data/interaction/test/{method}_{mode}_{recommender}_test_users.json', 'rb'))
 
         products = {v: k for k, v in inv_products.items()}  # flip dictionary to get access to keys
         users = {v: k for k, v in inv_users.items()}  # flip dictionary to get access to keys
 
         product_id = []
         user_id = []
+
+        # filter out transactions from unknown users:
+        df = df[df['user_id'].isin(users.keys())]
 
         for row in df.iterrows():  # get corresponding rows and columns for user-item interaction
             p_id = products[row[1]['product_name']]
@@ -233,7 +239,7 @@ class RecEval(object):
 
 if __name__ == '__main__':
     Rec = RecEval()
-    mode, method, sim, recommender, nr_of_items, eval_method, n, output = ('rating',
+    mode, method, sim, recommender, nr_of_items, eval_method, n, output = ('count',
                                                                            'freq',
                                                                            'cosine',
                                                                            'item',
