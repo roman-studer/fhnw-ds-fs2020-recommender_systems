@@ -27,7 +27,7 @@ class RecEval(object):
         self.da = da
 
         mae, nmae, rmse = 'mae', 'nmae', 'rmse'
-        self._evaluation_methid = {mae: RecEval.mae, nmae: RecEval.mae, rmse: RecEval.rmse}
+        self._evaluation_method = {mae: RecEval.mae, nmae: RecEval.mae, rmse: RecEval.rmse}
 
     def evaluate(self, mode, method, sim, recommender, nr_of_items, eval_method, n, output=True):
         """
@@ -61,14 +61,14 @@ class RecEval(object):
         last_products = self.get_prediction_rating(table=last_products, predictions=predictions)
 
         # run eval method
-        val = self._evaluation_methid[eval_method](last_products, own=True, output=output)
+        val = self._evaluation_method[eval_method](last_products, own=True, output=output)
 
         return val
 
 
     # todo train test split 90/10
     def train_test(self, df, p):
-
+        pass
 
     @staticmethod
     def get_last_n_products(df, n):

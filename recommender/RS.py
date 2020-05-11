@@ -82,10 +82,11 @@ class RS(_RecommenderInit):
                 interaction_matrix = csc_matrix((val, (row, col)), shape=(user_c.categories.size, product_name_c.categories.size))
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
-
+            # todo split into train test, return interaction_matrix & test_interaction_matrix
             # stores interaction matrix
             pickle.dump(interaction_matrix, open(path, "wb"))
             # stores the according dependencies of products and users as {index : user_id/product_name}
+            # todo flip key:value
             products = dict(enumerate(product_name_c.categories))
             products_path = path_prefix + 'products/' + filename_prefix + '_products.json'
             users_path = path_prefix + 'users/' + filename_prefix + '_users.json'
