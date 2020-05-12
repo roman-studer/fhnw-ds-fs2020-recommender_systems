@@ -153,6 +153,7 @@ class DA(object):
         if not isinstance(self._df_origin, pd.DataFrame):
             self._df_origin = pd.read_csv(self._nav + 'Recommender4Retail.csv', usecols=['user_id',
                                                                                          'order_id',
+                                                                                         'product_id',
                                                                                          'product_name',
                                                                                          'reordered',
                                                                                          'aisle_id'])
@@ -178,18 +179,20 @@ class DA(object):
         return self._nav
 
     @staticmethod
-    def drop_user(df, n_orders=5):
+    def drop_user(df, n_products = 50):
         """
         Drops every user in a DataFrame that has n_orders or less in total
+        
         :param df: sorted and reduced DataFrame
-        :param n_orders: Number of orders of a customers, below that and he will be dropped
-        :return df: DataFrame without the dropped customers
+        :param n_products: Number of products of a customer, below that they will be dropped
+        
+        :return: pd.DataFrame where the customers with too less purchases are dropped
         """
-        # group by number of orders
-        df_grouped = df.groupby('user_id').agg({'order_id': 'nunique'}).reset_index()
+        # aggregate by number of different purchased products
+        df_agg = df.groupby('user_id').agg(num_prod = pd.NamedAgg(column='product_name', aggfunc='nunique')).reset_index()
 
         # drop every customer with number of orders <= n_orders
-        users = df_grouped.loc[df_grouped.order_id >= n_orders].user_id.to_list()
+        users = df_agg.loc[df_agg.num_prod >= n_products].user_id.to_list()
         # reduce DataFrame
         df = df[df.user_id.isin(users)]
 
