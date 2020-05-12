@@ -12,7 +12,6 @@ from recommender._Recommender_Init import _RecommenderInit
 from data.DA import DA
 import os
 import warnings
-# np.seterr(divide='ignore', invalid='ignore')
 
 
 
@@ -88,6 +87,18 @@ class RS(_RecommenderInit):
                                                 shape=(user_c.categories.size, product_name_c.categories.size))
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
+
+            # normalize matrix if mode == 'count, gets max value for every row and divides by said value elementwise
+            if mode == 'count':
+
+                # get max value for every user
+                max_val = np.max(interaction_matrix, axis=1).toarray()
+
+                # divide every element per user by max_val
+                if recommender == 'user':
+                    interaction_matrix = csr_matrix(interaction_matrix/max_val)
+                if recommender == 'item':
+                    interaction_matrix = csc_matrix(interaction_matrix/max_val)
 
             # train test split
             interaction_matrix, test_interaction_matrix = self.train_test(df=interaction_matrix, p=0.1)
@@ -174,6 +185,7 @@ class RS(_RecommenderInit):
             self._interaction_mode = mode
             self._interaction_recommender = recommender
 
+
         return self._interaction_matrix
 
     def product_names(self, method='freq'):
@@ -224,11 +236,8 @@ class RS(_RecommenderInit):
             similarity_matrix = np.zeros((length, length), dtype=np.float32)  # empty similarity matrix
 
             # precalculate normalized vector over whole df
-            print('vektor', df[:,5145])
-
             normalized_vectors = norm(df, axis=0)
-            print(normalized_vectors[5144])
-            print(np.where(normalized_vectors==0))
+
             for i in np.arange(length):
                 # cosine similarity calculation
                 a = df[:, i]
