@@ -209,7 +209,7 @@ class RS(_RecommenderInit):
         :return similarity_matrix: nxn-Matrix containing the similarity values for every value pair
         """
         # check if user-user or item-item matrix already exists
-        path_sim = self._da.get_nav() + 'similarity/' + method + '_' + mode + '_' + recommender + '_similarity.pkl'
+        path_sim = self._da.get_nav() + 'similarity/' + method + '_' + mode + '_' + sim + '_' + recommender + '_similarity.pkl'
         if os.path.exists(path_sim):
             similarity_matrix = pickle.load(open(path_sim, 'rb'))
 
@@ -402,7 +402,7 @@ class RS(_RecommenderInit):
         """
         predictions = None
         recommender = 'item'
-        # S = self.similarity(method, mode, sim, recommender)
+        # S = self.similarity(method, mode, sim, recommender) # can't be in here to evaluate the recommender
 
         # convert R to sparse column matrix if not already done
         if isinstance(R, pd.DataFrame):
