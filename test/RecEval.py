@@ -22,7 +22,7 @@ class RecEval(object):
 
     def __init__(self):
         rs = RS()
-        da = DA.get_DA()
+        da = DA.get_DA() # maybe not necessary
         self.rs = rs
         self.da = da
 
@@ -45,10 +45,10 @@ class RecEval(object):
         # reduce data
         df = self.da.get_df_sub(method=method)
 
-        # self.rs.get_interaction(method=method, mode=mode, recommender=recommender)
+        self.rs.get_interaction(method=method, mode=mode, recommender=recommender)
 
         # get similarity
-        S = self.rs.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
+        # S = self.rs.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
 
         # get test_interaction
         test_interaction = self.rs.get_test_interaction(mode=mode, method=method, recommender=recommender)
@@ -60,7 +60,7 @@ class RecEval(object):
         last_products, masked_interaction = self.mask_item_rating(table=last_products, df=test_interaction)
 
         # predict
-        predictions = self.rs.predict(R=masked_interaction, S=S, nr_of_items=nr_of_items, mode=mode, method=method, sim=sim)
+        predictions = self.rs.predict(R=masked_interaction, nr_of_items=nr_of_items, mode=mode, method=method, sim=sim)
 
         # get prediction rating
         last_products = self.get_prediction_rating(table=last_products, predictions=predictions)

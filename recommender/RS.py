@@ -276,7 +276,7 @@ class RS(_RecommenderInit):
         :param df: sparse matrix with shape (user,item)
         :return s: similarity value between -1 and 1 (1 high correlation, 0 no correlation, -1 high negative correlation)
         """
-        if recommender == 'item':
+        if recommender == 'user':
             # initalize empty similarity_matrix:
             length = df.shape[0]  # length of user vector
             item_length = df.shape[1]  # length of item vector
@@ -294,7 +294,7 @@ class RS(_RecommenderInit):
                 s = [numerator[i] / denominator[i] for i in np.arange(len(numerator))]
                 similarity_matrix[i, :] = s
 
-        elif recommender == 'user':
+        elif recommender == 'item':
             # initalize empty similarity_matrix:
             length = df.shape[1]  # length of user vector
             item_length = df.shape[0]  # length of item vector
@@ -388,7 +388,7 @@ class RS(_RecommenderInit):
 
         return item_id
 
-    def predict(self, R, S, nr_of_items, mode, method, sim='cosine'):
+    def predict(self, R, nr_of_items, mode, method, sim='cosine'):
         """
         IBCF predictions for each given user in `R`
         
@@ -402,7 +402,7 @@ class RS(_RecommenderInit):
         """
         predictions = None
         recommender = 'item'
-        # S = self.similarity(method, mode, sim, recommender) # can't be in here to evaluate the recommender
+        S = self.similarity(method, mode, sim, recommender) # can't be in here to evaluate the recommender
 
         # convert R to sparse column matrix if not already done
         if isinstance(R, pd.DataFrame):
