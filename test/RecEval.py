@@ -22,20 +22,24 @@ class RecEval(object):
 
     def __init__(self):
         rs = RS()
-        da = DA.get_DA() # maybe not necessary
+        da = DA.get_DA()  # maybe not necessary
         self.rs = rs
         self.da = da
 
-        mae, nmae, rmse = 'mae', 'nmae', 'rmse'
-        self._evaluation_method = {mae: RecEval.mae, nmae: RecEval.mae, rmse: RecEval.rmse}
+        mae, nmae, rmse, precision_recall, = 'mae', 'nmae', 'rmse', 'precision_recall'
+        self._evaluation_method = {mae: RecEval.mae,
+                                   nmae: RecEval.nmae,
+                                   rmse: RecEval.rmse,
+                                   precision_recall: RecEval.precision_recall}
 
-    def evaluate(self, mode, method, sim, recommender, nr_of_items, eval_method, n, output=True):
+    def evaluate(self, mode, method, sim, recommender, nr_of_items, n=2, k=20, threshold=0.1):
         """
         Construct recommender and run evaluate function on it
         :param output: if True, prints output of evaluation method
-        :param n: number of ratings to mask per user
+        :param k: number of items to recommend
+        :param n: number of items to mask
         :param mode: defines how the interaction of the customer with the product should be represented (binary, count)
-        :param method: selects the method to reduce the dataframe (see product description)
+        :param method: selects the method to reduce the DataFrame (see product description)
         :param sim: defines the similarity method to be used
         :param recommender: defines if similarity matrix is for user-user or item-item matrix
         :param nr_of_items: number of items to display
@@ -47,14 +51,11 @@ class RecEval(object):
 
         self.rs.get_interaction(method=method, mode=mode, recommender=recommender)
 
-        # get similarity
-        # S = self.rs.similarity(method=method, mode=mode, sim=sim, recommender=recommender)
-
         # get test_interaction
         test_interaction = self.rs.get_test_interaction(mode=mode, method=method, recommender=recommender)
 
         # find n last products per user
-        last_products = self.get_last_n_products(df=df, n=2)
+        last_products = self.get_last_n_products(df=df, n=n, method=method, mode=mode, recommender=recommender)
 
         # mask ratings for n predefined items
         last_products, masked_interaction = self.mask_item_rating(table=last_products, df=test_interaction)
@@ -62,19 +63,28 @@ class RecEval(object):
         # predict
         predictions = self.rs.predict(R=masked_interaction, nr_of_items=nr_of_items, mode=mode, method=method, sim=sim)
 
-        # get prediction rating
+        # get prediction rating to last_products
         last_products = self.get_prediction_rating(table=last_products, predictions=predictions)
 
-        # run eval method
-        val = self._evaluation_method[eval_method](last_products, own=True, output=output)
+        # run prediction accuracy
+        mae = self._evaluation_method['mae'](last_products, own=True)
+        nmae = self._evaluation_method['nmae'](last_products, own=True)
+        rmse = self._evaluation_method['rmse'](last_products, own=True)
+        precision, recall = self._evaluation_method['precision_recall'](self,
+                                                                        method=method,
+                                                                        recommender=recommender,
+                                                                        last_products=last_products,
+                                                                        P=predictions,
+                                                                        k=k,
+                                                                        mode=mode,
+                                                                        threshold=0.1)
 
-        return val
+        evaluation = {'mae': mae, 'nmae': nmae, 'rmse': rmse, 'precision': precision, 'recall': recall}
 
-
-
+        return evaluation
 
     @staticmethod
-    def get_last_n_products(df, n):
+    def get_last_n_products(df, n, method, mode, recommender):
         """
         Gets n last products per user in dataframe and returns a list of these products
         :param df: Dataframe containing transaction records
@@ -166,7 +176,7 @@ class RecEval(object):
         return table
 
     @staticmethod
-    def mae(df, own=True, output=True):
+    def mae(df, own=True):
         """
         Evaluation Metric: Calculate mean absolut error for two columns
         Formula taken from "Collaborative Filtering Recommender Systems by Michael D. Ekstrand et al
@@ -186,13 +196,10 @@ class RecEval(object):
         else:
             val = mean_absolute_error(df['rating'], df['prediction'])
 
-        if output:
-            print(f'MAE for recommender with method:{method}, mode={mode}, sim={sim} \n {val}')
-
         return val
 
     @staticmethod
-    def nmae(df, own=True, output=True):
+    def nmae(df, own=True):
         """
         Evaluation Metric: Calculate normalized mean absolut error for two columns
         Formula taken from "Collaborative Filtering Recommender Systems by Michael D. Ekstrand et al
@@ -208,13 +215,10 @@ class RecEval(object):
             val += abs(row[1]['prediction'] - row[1]['rating'])
         val = val / (len(df) * (max(df['rating']) - min(df['rating'])))
 
-        if output:
-            print(f'NMAE for recommender with method:{method}, mode={mode}, sim={sim} \n {val}')
-
         return val
 
     @staticmethod
-    def rmse(df, own=True, output=True):
+    def rmse(df, own=True):
         """
         Evaluation Metric: Calculate root mean squared error for two columns
         Formula taken from "Collaborative Filtering Recommender Systems by Michael D. Ekstrand et al
@@ -228,23 +232,82 @@ class RecEval(object):
         if own:
             val = 0
             for row in df.iterrows():
-                val += (row[1]['prediction'] - row[1]['rating'])**2
-            val = np.sqrt(val/len(df))
+                val += (row[1]['prediction'] - row[1]['rating']) ** 2
+            val = np.sqrt(val / len(df))
 
         else:
             val = mean_absolute_error(df['rating'], df['prediction'], squared=False)  # if squared True: Return is MSE
 
-        if output:
-            print(f'RMSE for recommender with method:{method}, mode={mode}, sim={sim} \n {val}')
+        return val
+
+    # todo add filter for 'relevant' items in rec_item and masked_item
+    def _precision_recall(self, user, last_products, P, k, mode, threshold=0.1):
+        """"
+        Precision@k = (# of recommended items @k that are relevant) / (# of recommended items @k)
+        :param threshold: threshold to define a 'relevant' item
+        :param last_products:
+        :param user: int equal to user_id
+        :param mode: mode of rating generation (binary, count, rating)
+        :param k: number of items to recommend
+        :param P: Prediction Matrix
+        """
+        # prediction matrix to csr
+        P = P.tocsr()
+
+        # get k items to recommend
+        rec_item, rec_prediction = self.rs.recommend_n(n=k, P=P, user=user)
+
+        # get products of user
+        df = last_products[last_products.user_id == user]
+        masked_item = df.row_id.tolist()
+        masked_rating = df.rating.tolist()
+
+        # precision
+        precision = len(list(set(rec_item) & set(masked_item))) / k
+
+        # recall
+        try:
+            recall = len(list(set(rec_item) & set(masked_item))) / len(
+                [i for i in rec_prediction.tolist()[0] if i >= threshold])
+        except:
+            recall = 0
+        return precision, recall
+
+    def precision_recall(self, method, mode, recommender, last_products, P, k, threshold=0.1):
+        sum_precision = 0
+        sum_recall = 0
+        users = last_products.user_id.unique()
+
+        # load json
+        inv_users = json.load(open(f'../data/interaction/test/{method}_{mode}_{recommender}_test_users.json', 'rb'))
+        inv_users = {v: k for k, v in inv_users.items()}
+
+        for user in users:
+            user_number = int(inv_users.get(user))
+            precision, recall = self._precision_recall(user=user_number,
+                                                       last_products=last_products,
+                                                       P=P,
+                                                       k=k,
+                                                       mode=mode,
+                                                       threshold=threshold)
+            sum_precision += precision
+            sum_recall += recall
+
+        t_precision = sum_precision / len(users)
+        t_recall = sum_recall / len(users)
+
+        return t_precision, t_recall
+
 
 if __name__ == '__main__':
     Rec = RecEval()
-    mode, method, sim, recommender, nr_of_items, eval_method, n, output = ('count',
-                                                                           'freq',
-                                                                           'cosine',
-                                                                           'item',
-                                                                           20,
-                                                                           'rmse',
-                                                                           2,
-                                                                           True)
-    Rec.evaluate(mode, method, sim, recommender, nr_of_items, eval_method, n, output=True)
+    mode, method, sim, recommender, nr_of_items, eval_method, n, threshold, k = ('count',
+                                                                                 'freq',
+                                                                                 'cosine',
+                                                                                 'item',
+                                                                                 20,
+                                                                                 'mae',
+                                                                                 5,
+                                                                                 0.1,
+                                                                                 20)
+    Rec.evaluate(mode, method, sim, recommender, nr_of_items, n=2, k=20, threshold=0.1)

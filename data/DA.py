@@ -179,7 +179,7 @@ class DA(object):
         return self._nav
 
     @staticmethod
-    def drop_user(df, n_products = 50):
+    def drop_user(df, n_products=50):
         """
         Drops every user in a DataFrame that has n_orders or less in total
         
@@ -189,7 +189,7 @@ class DA(object):
         :return: pd.DataFrame where the customers with too less purchases are dropped
         """
         # aggregate by number of different purchased products
-        df_agg = df.groupby('user_id').agg(num_prod = pd.NamedAgg(column='product_name', aggfunc='nunique')).reset_index()
+        df_agg = df.groupby('user_id').agg(num_prod=pd.NamedAgg(column='product_name', aggfunc='nunique')).reset_index()
 
         # drop every customer with number of orders <= n_orders
         users = df_agg.loc[df_agg.num_prod >= n_products].user_id.to_list()

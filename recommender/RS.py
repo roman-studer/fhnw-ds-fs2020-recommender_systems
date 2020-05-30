@@ -80,11 +80,15 @@ class RS(_RecommenderInit):
 
             # csr_matrix for user-user or csc_matrix for item-item
             if recommender == 'user':
-                interaction_matrix = csr_matrix((val, (row, col)),
-                                                shape=(user_c.categories.size, product_name_c.categories.size))
+                interaction_matrix = csr_matrix((val,
+                                                 (row, col)),
+                                                shape=(user_c.categories.size, product_name_c.categories.size),
+                                                dtype=np.float32)
             elif recommender == 'item':
-                interaction_matrix = csc_matrix((val, (row, col)),
-                                                shape=(user_c.categories.size, product_name_c.categories.size))
+                interaction_matrix = csc_matrix((val,
+                                                 (row, col)),
+                                                shape=(user_c.categories.size, product_name_c.categories.size),
+                                                dtype=np.float32)
             else:
                 raise AssertionError(f'Parameter recommender needs to be str "user" or "item" not {recommender}')
 
@@ -96,9 +100,9 @@ class RS(_RecommenderInit):
 
                 # divide every element per user by max_val
                 if recommender == 'user':
-                    interaction_matrix = csr_matrix(interaction_matrix/max_val)
+                    interaction_matrix = csr_matrix(interaction_matrix/max_val, dtype=np.float32)
                 if recommender == 'item':
-                    interaction_matrix = csc_matrix(interaction_matrix/max_val)
+                    interaction_matrix = csc_matrix(interaction_matrix/max_val, dtype=np.float32)
 
             # train test split
             interaction_matrix, test_interaction_matrix = self.train_test(df=interaction_matrix, p=0.1)
@@ -137,7 +141,6 @@ class RS(_RecommenderInit):
 
         return test_interaction_matrix
 
-    # todo train test split 90/10
     @staticmethod
     def train_test(df, p):
         """
@@ -416,7 +419,6 @@ class RS(_RecommenderInit):
             """This mode works if the rating is NOT unary AND
             when it is NOT possible for similarity scores to be negative when ratings are constrained to be nonnegative.
             
-            Formula: p_{u,i} = (sum_{j∈S}(s(i,j)*r_{u,j})) / (sum_{j∈S}(abs(s(i,j)))) | S is a set of items similar to i
             
             Equation 2.8 shown in:
             Collaborative Filtering Recommender Systems 2010
@@ -480,6 +482,22 @@ class RS(_RecommenderInit):
 
         return predictions
 
+    def recommend_n(self, n, P, user):
+        """
+        Recommend list of n items to user
+        :param n: n items to recommend
+        :param P: Prediction Matrix
+        :param user: user_id
+        :return: list of item to recommend, list of predicted rating for said items
+        """
+        P = P.tocsr()
+        user_list = P[user,:].todense()[0]
+
+        item = np.argsort(user_list).tolist()[0][::-1][:n]
+        predicted = np.take(user_list, item)
+
+
+        return item, predicted
 
 if __name__ == '__main__':
     rs = RS()
