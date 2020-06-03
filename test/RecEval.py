@@ -252,10 +252,11 @@ class RecEval(object):
         :param P: Prediction Matrix
         """
         # prediction matrix to csr
-        P = P.tocsr()
+        if mode != 'binary':
+            P = P.tocsr()
 
         # get k items to recommend
-        rec_item, rec_prediction = self.rs.recommend_n(n=k, P=P, user=user)
+        rec_item, rec_prediction = self.rs.recommend_n(n=k, P=P, user=user, mode=mode)
 
         # get products of user
         df = last_products[last_products.user_id == user]
