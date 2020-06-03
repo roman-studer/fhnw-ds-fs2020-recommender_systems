@@ -482,7 +482,7 @@ class RS(_RecommenderInit):
 
         return predictions
 
-    def recommend_n(self, n, P, user):
+    def recommend_n(self, n, P, user, mode):
         """
         Recommend list of n items to user
         :param n: n items to recommend
@@ -490,10 +490,15 @@ class RS(_RecommenderInit):
         :param user: user_id
         :return: list of item to recommend, list of predicted rating for said items
         """
-        P = P.tocsr()
-        user_list = P[user,:].todense()[0]
+        if mode != 'binary':
+            P = P.tocsr()
+            user_list = P[user,:].todense()[0]
+            item = np.argsort(user_list).tolist()[0][::-1][:n]
 
-        item = np.argsort(user_list).tolist()[0][::-1][:n]
+        else:
+            user_list = P[user, :]
+            item = np.argsort(user_list).tolist()[::-1][:n]
+
         predicted = np.take(user_list, item)
 
 
