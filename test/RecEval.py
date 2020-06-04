@@ -258,8 +258,8 @@ class RecEval(object):
         masked_item = df['row_id'].tolist()
 
         masked_rating = df.rating.tolist()
-        print(f'masked item: {masked_item}')
-        print(f'rec item: {rec_item}')
+        #print(f'masked item: {masked_item}')
+        #print(f'rec item: {rec_item}')
         # precision
         precision = len(list(set(rec_item) & set(masked_item))) / k
 
@@ -291,8 +291,7 @@ class RecEval(object):
                                                        threshold=threshold)
             sum_precision += precision
             sum_recall += recall
-        print(f'sum precision: {sum_precision}')
-        print(f'sum recall: {sum_recall}')
+
         t_precision = sum_precision / len(users)
         t_recall = sum_recall / len(users)
 
