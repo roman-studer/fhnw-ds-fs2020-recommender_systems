@@ -403,82 +403,88 @@ class RS(_RecommenderInit):
         :returns: -scipy.sparse coo_matrix if `method` was 'rating' or 'count'
                   - np.array if `method` was 'binary' (float32)
         """
-        predictions = None
-        recommender = 'item'
-        S = self.similarity(method, mode, sim, recommender) # can't be in here to evaluate the recommender
-
-        # convert R to sparse column matrix if not already done
-        if isinstance(R, pd.DataFrame):
-            R = csc_matrix(R.values)
-        elif isinstance(R, np.matrix) or isinstance(R, np.ndarray):
-            R = csc_matrix(R)
-        elif issparse(R):
-            pass
-
-        if mode == 'rating' or mode == 'count':
-            """This mode works if the rating is NOT unary AND
-            when it is NOT possible for similarity scores to be negative when ratings are constrained to be nonnegative.
-            
-            
-            Equation 2.8 shown in:
-            Collaborative Filtering Recommender Systems 2010
-            By Michael D. Ekstrand, John T. Riedl and Joseph A. Konstan"""
-
-            batchsize = 10000  # tests have shown that this is a good batch size to avoid performance issues
-            df_s = self.n_nearest_items(nr_of_items, mode, method, recommender, sim)
-            df_ix = df_s.iloc[:, 2:]
-            num_items = int(df_ix.shape[1] / 3)
-            s_ix_np = df_ix.iloc[:, num_items:-num_items].to_numpy()
-            sim_product = df_s.iloc[:, -num_items:].to_numpy()
-
-            # create sparse similarity matrix where for each column the item_i just contains the k nearest similarities
-            # rest is zero for matrix dot product
-            col_ix = np.array([s_ix_np.shape[1] * [i] for i in range(s_ix_np.shape[0])]).ravel()
-            row_ix = s_ix_np.astype(int).ravel()
-            A = np.zeros(S.shape)
-            A[row_ix, col_ix] = 1
-            S = A * S  # hadamard product to just keep k similarities
-            S = csr_matrix(S)
-
-            # perform batchwise predictions
-            i_prev = 0
-            denominators = 1 / np.sum(np.absolute(sim_product), axis=1)
-
-            for i in range(batchsize, R.shape[0] + batchsize, batchsize):
-                # batch prep
-                i = min(i, R.shape[0])
-                batch = R[i_prev:i]
-
-                # numerators
-                batch_predictions = batch.dot(S)
-
-                # denominators with hadamard product
-                D = np.array([[denominator] * batch_predictions.shape[0] for denominator in denominators]).T
-                batch_predictions = batch_predictions.multiply(D)
-
-                # append batch to predictions
-                if issparse(predictions):
-                    predictions = vstack([predictions, batch_predictions])
-                else:
-                    predictions = batch_predictions
-
-                # update slice index
-                i_prev = i
-
-        elif mode == 'binary':
-            """This mode works only for unary scores.
-            
-            Formula: p_{u,i} = sum_{j∈I_u}(s(i,j)) | I_u is the user's purchase history
-            
-            Equation 2.10 shown in:
-            Collaborative Filtering Recommender Systems 2010
-            By Michael D. Ekstrand, John T. Riedl and Joseph A. Konstan"""
-
-            # dot product works because summation of similarities which are in I_u is given if rating is unary
-            # and non bought-items are weighted as zero
-            I = coo_matrix(R).tocsr()
-            predictions = np.float32(
-                I.dot(S))  # np.float32 doubles execution time, but reduces memory requirements by half
+        path_prefix = self._da.get_nav() + 'prediction/'
+        filename_prefix = method + '_' + mode + '_item'
+        path = path_prefix + filename_prefix + '_prediction.pkl'
+        if os.path.exists(path):
+            predictions = pickle.load(open(path, "rb"))
+        else:
+            predictions = None
+            recommender = 'item'
+            S = self.similarity(method, mode, sim, recommender) # can't be in here to evaluate the recommender
+    
+            # convert R to sparse column matrix if not already done
+            if isinstance(R, pd.DataFrame):
+                R = csc_matrix(R.values)
+            elif isinstance(R, np.matrix) or isinstance(R, np.ndarray):
+                R = csc_matrix(R)
+            elif issparse(R):
+                pass
+    
+            if mode == 'rating' or mode == 'count':
+                """This mode works if the rating is NOT unary AND
+                when it is NOT possible for similarity scores to be negative when ratings are constrained to be nonnegative.
+                
+                
+                Equation 2.8 shown in:
+                Collaborative Filtering Recommender Systems 2010
+                By Michael D. Ekstrand, John T. Riedl and Joseph A. Konstan"""
+    
+                batchsize = 10000  # tests have shown that this is a good batch size to avoid performance issues
+                df_s = self.n_nearest_items(nr_of_items, mode, method, recommender, sim)
+                df_ix = df_s.iloc[:, 2:]
+                num_items = int(df_ix.shape[1] / 3)
+                s_ix_np = df_ix.iloc[:, num_items:-num_items].to_numpy()
+                sim_product = df_s.iloc[:, -num_items:].to_numpy()
+    
+                # create sparse similarity matrix where for each column the item_i just contains the k nearest similarities
+                # rest is zero for matrix dot product
+                col_ix = np.array([s_ix_np.shape[1] * [i] for i in range(s_ix_np.shape[0])]).ravel()
+                row_ix = s_ix_np.astype(int).ravel()
+                A = np.zeros(S.shape)
+                A[row_ix, col_ix] = 1
+                S = A * S  # hadamard product to just keep k similarities
+                S = csr_matrix(S)
+    
+                # perform batchwise predictions
+                i_prev = 0
+                denominators = 1 / np.sum(np.absolute(sim_product), axis=1)
+    
+                for i in range(batchsize, R.shape[0] + batchsize, batchsize):
+                    # batch prep
+                    i = min(i, R.shape[0])
+                    batch = R[i_prev:i]
+    
+                    # numerators
+                    batch_predictions = batch.dot(S)
+    
+                    # denominators with hadamard product
+                    D = np.array([[denominator] * batch_predictions.shape[0] for denominator in denominators]).T
+                    batch_predictions = batch_predictions.multiply(D)
+    
+                    # append batch to predictions
+                    if issparse(predictions):
+                        predictions = vstack([predictions, batch_predictions])
+                    else:
+                        predictions = batch_predictions
+    
+                    # update slice index
+                    i_prev = i
+    
+            elif mode == 'binary':
+                """This mode works only for unary scores.
+                
+                Formula: p_{u,i} = sum_{j∈I_u}(s(i,j)) | I_u is the user's purchase history
+                
+                Equation 2.10 shown in:
+                Collaborative Filtering Recommender Systems 2010
+                By Michael D. Ekstrand, John T. Riedl and Joseph A. Konstan"""
+    
+                # dot product works because summation of similarities which are in I_u is given if rating is unary
+                # and non bought-items are weighted as zero
+                I = coo_matrix(R).tocsr()
+                predictions = np.float32(
+                    I.dot(S))  # np.float32 doubles execution time, but reduces memory requirements by half
 
         return predictions
 
