@@ -485,6 +485,8 @@ class RS(_RecommenderInit):
                 I = coo_matrix(R).tocsr()
                 predictions = np.float32(
                     I.dot(S))  # np.float32 doubles execution time, but reduces memory requirements by half
+            
+            pickle.dump(predictions, open(path, "wb"))
 
         return predictions
 
