@@ -247,8 +247,11 @@ class RS(_RecommenderInit):
                 numerator = np.array(df.T.dot(a).todense().T)[0] # get the dotproduct for vector a and every other vector
                 denominator = normalized_vectors * normalized_vectors[i]
 
-
+            if 0 in denominator:
+                s = 0
+            else:
                 s = numerator / denominator
+
 
                 similarity_matrix[i, :] = s
 
