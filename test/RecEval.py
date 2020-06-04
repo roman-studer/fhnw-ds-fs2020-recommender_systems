@@ -32,7 +32,7 @@ class RecEval(object):
                                    rmse: RecEval.rmse,
                                    precision_recall: RecEval.precision_recall}
 
-    def evaluate(self, mode, method, sim, recommender, nr_of_items, n=2, k=20, threshold=0.1, n_user=100):
+    def evaluate(self, mode, method, sim, recommender, nr_of_items, n=2, k=20, threshold=0.1, n_user=20):
         """
         Construct recommender and run evaluate function on it
         :param output: if True, prints output of evaluation method
@@ -123,7 +123,6 @@ class RecEval(object):
 
         df['row_id'] = product_id
         df['col_id'] = user_id
-
         return df[['user_id',
                    'product_name',
                    'row_id',
@@ -237,7 +236,7 @@ class RecEval(object):
         return val
 
     # todo add filter for 'relevant' items in rec_item and masked_item
-    def _precision_recall(self, user, last_products, P, k, mode, threshold=0.1):
+    def _precision_recall(self, user, user_number, last_products, P, k, mode, threshold=0.1):
         """"
         Precision@k = (# of recommended items @k that are relevant) / (# of recommended items @k)
         :param threshold: threshold to define a 'relevant' item
@@ -252,13 +251,15 @@ class RecEval(object):
             P = P.tocsr()
 
         # get k items to recommend
-        rec_item, rec_prediction = self.rs.recommend_n(n=k, P=P, user=user, mode=mode)
+        rec_item, rec_prediction = self.rs.recommend_n(n=k, P=P, user=user_number, mode=mode)
 
         # get products of user
         df = last_products[last_products.user_id == user]
-        masked_item = df.row_id.tolist()
-        masked_rating = df.rating.tolist()
+        masked_item = df['row_id'].tolist()
 
+        masked_rating = df.rating.tolist()
+        #print(f'masked item: {masked_item}')
+        #print(f'rec item: {rec_item}')
         # precision
         precision = len(list(set(rec_item) & set(masked_item))) / k
 
@@ -270,7 +271,7 @@ class RecEval(object):
             recall = 0
         return precision, recall
 
-    def precision_recall(self, method, mode, recommender, last_products, P, k, threshold=0.1, n_user=100):
+    def precision_recall(self, method, mode, recommender, last_products, P, k, threshold=0.1, n_user=20):
         sum_precision = 0
         sum_recall = 0
         users = last_products.user_id.unique()[:n_user]
@@ -281,7 +282,8 @@ class RecEval(object):
 
         for user in users:
             user_number = int(inv_users.get(user))
-            precision, recall = self._precision_recall(user=user_number,
+            precision, recall = self._precision_recall(user=user,
+                                                       user_number=user_number,
                                                        last_products=last_products,
                                                        P=P,
                                                        k=k,
