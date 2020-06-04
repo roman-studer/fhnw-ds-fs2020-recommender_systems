@@ -32,7 +32,7 @@ class RecEval(object):
                                    rmse: RecEval.rmse,
                                    precision_recall: RecEval.precision_recall}
 
-    def evaluate(self, mode, method, sim, recommender, nr_of_items, n=2, k=20, threshold=0.1):
+    def evaluate(self, mode, method, sim, recommender, nr_of_items, n=2, k=20, threshold=0.1, n_user=100):
         """
         Construct recommender and run evaluate function on it
         :param output: if True, prints output of evaluation method
@@ -44,6 +44,7 @@ class RecEval(object):
         :param recommender: defines if similarity matrix is for user-user or item-item matrix
         :param nr_of_items: number of items to display
         :param eval_method: method to evaluate recommender
+        :param n_user: number of users to calculate prediction and recall with
         :return: returns output of evaluation function
         """
         # reduce data
@@ -77,7 +78,8 @@ class RecEval(object):
                                                                         P=predictions,
                                                                         k=k,
                                                                         mode=mode,
-                                                                        threshold=0.1)
+                                                                        threshold=0.1,
+                                                                        n_user=n_user)
 
         evaluation = {'mae': mae, 'nmae': nmae, 'rmse': rmse, 'precision': precision, 'recall': recall}
 
@@ -268,10 +270,10 @@ class RecEval(object):
             recall = 0
         return precision, recall
 
-    def precision_recall(self, method, mode, recommender, last_products, P, k, threshold=0.1):
+    def precision_recall(self, method, mode, recommender, last_products, P, k, threshold=0.1, n_user=100):
         sum_precision = 0
         sum_recall = 0
-        users = last_products.user_id.unique()
+        users = last_products.user_id.unique()[:n_user]
 
         # load json
         inv_users = json.load(open(f'../data/interaction/test/{method}_{mode}_{recommender}_test_users.json', 'rb'))
