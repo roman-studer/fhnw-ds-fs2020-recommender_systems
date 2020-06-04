@@ -188,11 +188,8 @@ class RecEval(object):
         :return val: returns mean absolut error
         """
         if own:
-            val = 0
-            for row in df.iterrows():
-                val += abs(row[1]['prediction'] - row[1]['rating'])
-            val = val / len(df)
-
+            df['mae'] = df['prediction'] - df['rating']
+            val = df['mae'].abs().sum() / len(df)
         else:
             val = mean_absolute_error(df['rating'], df['prediction'])
 
@@ -210,10 +207,8 @@ class RecEval(object):
         :param df: pandas dataframe containing ratings from evaluate function
         :return val: returns mean absolut error
         """
-        val = 0
-        for row in df.iterrows():
-            val += abs(row[1]['prediction'] - row[1]['rating'])
-        val = val / (len(df) * (max(df['rating']) - min(df['rating'])))
+        df['nmae'] = df['prediction'] - df['rating']
+        val = df['nmae'].abs().sum() / (len(df) * (max(df['rating']) - min(df['rating'])))
 
         return val
 
@@ -230,10 +225,9 @@ class RecEval(object):
         :return val: returns mean absolut error
         """
         if own:
-            val = 0
-            for row in df.iterrows():
-                val += (row[1]['prediction'] - row[1]['rating']) ** 2
-            val = np.sqrt(val / len(df))
+
+            df['rmse'] = (df['prediction'] - df['rating']) ** 2
+            val = np.sqrt(df['rmse'].abs().sum() / len(df))
 
         else:
             val = mean_absolute_error(df['rating'], df['prediction'], squared=False)  # if squared True: Return is MSE
