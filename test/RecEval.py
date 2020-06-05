@@ -259,7 +259,7 @@ class RecEval(object):
 
         masked_rating = df.rating.tolist()
         #print(f'masked item: {masked_item}')
-        #print(f'rec item: {rec_item}')
+        #   print(f'rec item: {rec_item}')
         # precision
         precision = len(list(set(rec_item) & set(masked_item))) / k
 
