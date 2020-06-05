@@ -16,7 +16,7 @@ class DA(object):
     def get_DA(nav=None):
         """
         Returns single instance of DA (DataAccess)
-        
+
         Keyword arguments:
         nav -- path-navigation to root (default ../)
         """
@@ -179,13 +179,13 @@ class DA(object):
         return self._nav
 
     @staticmethod
-    def drop_user(df, n_products=60):
+    def drop_user(df, n_products=50):
         """
         Drops every user in a DataFrame that has n_orders or less in total
-        
+
         :param df: sorted and reduced DataFrame
         :param n_products: Number of products of a customer, below that they will be dropped
-        
+
         :return: pd.DataFrame where the customers with too less purchases are dropped
         """
         # aggregate by number of different purchased products

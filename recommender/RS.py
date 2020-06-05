@@ -6,16 +6,15 @@ import pickle, json
 
 from numpy.core._multiarray_umath import ndarray
 from scipy.sparse import csr_matrix, csc_matrix, coo_matrix, issparse, vstack
-from scipy.sparse.linalg import norm
+from scipy.sparse.linalg import norm, svds
 from pandas.api.types import CategoricalDtype
-from recommender._Recommender_Init import _RecommenderInit
 from data.DA import DA
 import os
 import warnings
 
 
 
-class RS(_RecommenderInit):
+class RS(object):
     """
     Example class of a recommender. Every Recommender will have its own class
     structured.
@@ -407,7 +406,7 @@ class RS(_RecommenderInit):
                   - np.array if `method` was 'binary' (float32)
         """
         path_prefix = self._da.get_nav() + 'prediction/'
-        filename_prefix = method + '_' + mode + '_item'
+        filename_prefix = method + '_' + mode + '_' + sim + '_' + str(nr_of_items) + '_item'
         path = path_prefix + filename_prefix + '_prediction.pkl'
         if os.path.exists(path):
             predictions = pickle.load(open(path, "rb"))
@@ -514,6 +513,27 @@ class RS(_RecommenderInit):
 
 
         return item, predicted
+    
+    def svd(self, train_im, k):
+        """
+        Performs singular value decomposition (SVD) on the given interaction matrix `train_im` and
+        takes the `k` largest singular values to reconstruct the prediction output matrix
+        
+        :param train_im: scipy.sparse.csc_matrix, interaction matrix to perform SVD
+        :param k: int, number of largest singular values to consider in order to calculate the output matrix
+        
+        :returns: prediction output matrix `X_hat`
+        """
+        # decomposes the train interaction matrix `train_im` and creates user-represenation U, singular values s and item-representation VT
+        U, s, VT = svds(A = train_im, k = k) # which = ‘LM’ : largest singular values is default
+        
+        # creates diagonal sigma matrix out of the singular values
+        sigma = np.diagflat(np.sqrt(s))
+        
+        # construct the matrix X_hat
+        X_hat = np.dot(np.dot(U, sigma), VT)
+        
+        return X_hat
 
 if __name__ == '__main__':
     rs = RS()
@@ -524,47 +544,3 @@ if __name__ == '__main__':
     # predictions = rs.predict(R, nr_of_items, mode, method, sim)
     # print(predictions)
 
-# old interaction function, new one uses a sparse matrix for better performance
-'''    def get_interaction(self, mode='binary', method='freq', pivot=False):
-        """
-        Creates an interaction matrix with shape (users,products)
-        :param method: selects the method to reduce the dataframe (see product description)
-        :param mode: defines how the interaction of the customer with the product should be represented (binary, count)
-        :return: numpy array
-        """
-        # check if interaction matrix already exists:
-        path = self._nav + method + '_interaction_' + mode + '.csv'
-        matrix = mode + '_' + method
-        if os.path.exists(path):
-            self._interaction[matrix] = pd.read_csv(path)
-        # create interaction_matrix
-        else:
-            # get data
-            self.get_df_sub(method)
-            df = self._df_sub_data[method]
-
-            # create interaction matrix
-            if pivot:
-                if mode == 'count':
-                    df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
-                elif mode == 'binary':
-                    df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
-
-                    # helperfunction
-                    def val_to_binary(x):
-                        if x > 0:
-                            x = 1
-                        else:
-                            x = 0
-                        return x
-
-                    df = df.applymap(val_to_binary)
-                else:
-                    raise Exception(
-                        'Function "get_interaction" only accepts mode "binary" and "count" not "{}"'.format(mode))
-
-            self._interaction[matrix] = df
-
-            # save interaction matrix
-            self._interaction[matrix].to_csv(path, index=False)
-        return self._interaction[matrix].to_numpy()'''
