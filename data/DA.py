@@ -5,7 +5,6 @@ Created on Thu Feb 27 19:25:15 2020
 @author: Lukas
 """
 import pandas as pd
-import numpy as np
 import os
 from pathlib import Path
 
@@ -17,7 +16,7 @@ class DA(object):
     def get_DA(nav=None):
         """
         Returns single instance of DA (DataAccess)
-        
+
         Keyword arguments:
         nav -- path-navigation to root (default ../)
         """
@@ -32,14 +31,11 @@ class DA(object):
     def __init__(self):
         self._df_origin = None
         self._nav = None
-        freq, aisle, rating, binary, count_int = 'freq', 'aisle', 'rating', 'binary', 'count_int'
-        binary_freq, binary_aisle, binary_rating, count_int_freq, count_int_aisle, count_int_rating = 'binary_freq', 'binary_asile', 'binary_rating', 'count_int_freq', 'count_int_aisle', 'count_int_rating'
+        freq, aisle, rating = 'freq', 'aisle', 'rating'
         self._df_sub_data = {freq: None, aisle: None, rating: None}
         self._df_sub_methods = {freq: self._red_prod_freq,
                                 aisle: self._red_prod_aisle,
                                 rating: self._red_prod_rating}
-        self._interaction = {binary_freq: None, binary_aisle: None, binary_rating: None,
-                             count_int_freq: None, count_int_aisle: None, count_int_rating: None}
 
     def _red_prod_freq(self, df=None, drop=0.8):
         """Drops `drop` of the most unpopular products"""
@@ -50,7 +46,6 @@ class DA(object):
         items = products[:ix].keys()
         df_selected = df[df['product_name'].isin(items)]
         df_selected = self.drop_user(df_selected)
-        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
         return df_selected.reset_index(drop=True)
 
     def _red_prod_aisle(self, drop=0.8):
@@ -61,7 +56,6 @@ class DA(object):
         for aisle_id, group in df_grouped:
             df_selected = df_selected.append(self._red_prod_freq(group, drop))
         df_selected = self.drop_user(df_selected)
-        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
 
         return df_selected
 
@@ -103,7 +97,6 @@ class DA(object):
         items = products[:ix].values
         df_selected = df[df[product_name].isin(items)]
         df_selected = self.drop_user(df_selected)
-        df_selected = df_selected.loc[:, ['user_id', 'product_name']]
 
         return df_selected.reset_index(drop=True)
 
@@ -160,6 +153,7 @@ class DA(object):
         if not isinstance(self._df_origin, pd.DataFrame):
             self._df_origin = pd.read_csv(self._nav + 'Recommender4Retail.csv', usecols=['user_id',
                                                                                          'order_id',
+                                                                                         'product_id',
                                                                                          'product_name',
                                                                                          'reordered',
                                                                                          'aisle_id'])
@@ -169,56 +163,14 @@ class DA(object):
     def get_df_sub(self, method='freq'):
         """Lazy loader of the sub dataset"""
         if not isinstance(self._df_sub_data[method], pd.DataFrame):
-            path = self._nav + method + '.csv'
+            path = self.get_nav() + 'sub/' + method + '.csv'
             if os.path.exists(path):
                 self._df_sub_data[method] = pd.read_csv(path)
             else:
-                self._df_sub_data[method] = self._df_sub_methods[method]()
+                df_sub = self._df_sub_methods[method]()
+                self._df_sub_data[method] = df_sub.loc[:, ['user_id', 'order_id', 'product_name']]
                 self._df_sub_data[method].to_csv(path, index=False)
         return self._df_sub_data[method]
-
-    def get_interaction(self, mode='binary', method='freq'):
-        """
-        Creates an interaction matrix with shape (users,products)
-        :param method: selects the method to reduce the dataframe (see product description)
-        :param mode: defines how the interaction of the customer with the product should be represented (binary, count)
-        :return: numpy array
-        """
-        # check if interaction matrix already exists:
-        path = self._nav + method + '_interaction_' + mode + '.csv'
-        matrix = mode + '_' + method
-        if os.path.exists(path):
-            self._interaction[matrix] = pd.read_csv(path)
-        # create interaction_matrix
-        else:
-            # get data
-            self.get_df_sub(method)
-            df = self._df_sub_data[method]
-
-            # create interaction matrix
-            if mode == 'count':
-                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
-            elif mode == 'binary':
-                df = df.pivot_table(index='user_id', columns='product_name', aggfunc=len, fill_value=0)
-
-                # helperfunction
-                def val_to_binary(x):
-                    if x > 0:
-                        x = 1
-                    else:
-                        x = 0
-                    return x
-
-                df = df.applymap(val_to_binary)
-            else:
-                raise Exception(
-                    'Function "get_interaction" only accepts mode "binary" and "count" not "{}"'.format(mode))
-
-            self._interaction[matrix] = df
-
-            # save interaction matrix
-            self._interaction[matrix].to_csv(path, index=False)
-        return self._interaction[matrix].to_numpy()
 
     def set_nav(self, nav):
         self._nav = nav
@@ -227,23 +179,26 @@ class DA(object):
         return self._nav
 
     @staticmethod
-    def drop_user(df, n_orders=5):
+    def drop_user(df, n_products=50):
         """
         Drops every user in a DataFrame that has n_orders or less in total
+
         :param df: sorted and reduced DataFrame
-        :param n_orders: Number of orders of a customers, below that and he will be dropped
-        :return df: DataFrame without the dropped customers
+        :param n_products: Number of products of a customer, below that they will be dropped
+
+        :return: pd.DataFrame where the customers with too less purchases are dropped
         """
-        # group by number of orders
-        df_grouped = df.groupby('user_id').agg({'order_id': 'nunique'}).reset_index()
+        # aggregate by number of different purchased products
+        df_agg = df.groupby('user_id').agg(num_prod=pd.NamedAgg(column='product_name', aggfunc='nunique')).reset_index()
 
         # drop every customer with number of orders <= n_orders
-        users = df_grouped.loc[df_grouped.order_id >= n_orders].user_id.to_list()
+        users = df_agg.loc[df_agg.num_prod >= n_products].user_id.to_list()
         # reduce DataFrame
         df = df[df.user_id.isin(users)]
 
         return df
 
+
 if __name__ == '__main__':
     A = DA.get_DA()
-    A.get_interaction(mode='binary', method='freq')
+    A.get_df_sub(method='count')

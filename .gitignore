@@ -128,11 +128,24 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# CODEOWNERS
+CODEOWNERS
+
 # Data objects
 *.csv
 *.pkl
+*.json
 
 # IDE dependencies
 .idea
 .spyproject
-
+ 
+.idea/misc.xml
+.idea/misc.xml
+.idea/fhnw-ds-fs2020-recommender_systems.iml
+.idea/fhnw-ds-fs2020-recommender_systems.iml
+.idea/fhnw-ds-fs2020-recommender_systems.iml
+.idea/misc.xml
+.idea/fhnw-ds-fs2020-recommender_systems.iml
+.idea/misc.xml
+data/reduce_csv.py
