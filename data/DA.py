@@ -179,7 +179,7 @@ class DA(object):
         return self._nav
 
     @staticmethod
-    def drop_user(df, n_products=70):
+    def drop_user(df, n_products=60):
         """
         Drops every user in a DataFrame that has n_orders or less in total
         
